@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"
+        integrity="sha512-bcfltY+lNLlNxz38yBBm/HLaUB1gTV6I0e+fahbF9pS6roIdzUytozWdnFV8ZnM6cSAG5EbmO0ag0a/fLZSG4Q=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="./background.js" defer></script>
+
+    <title>p5.js example</title>
+    <style>
+        body {
+            color: antiquewhite;
+            font-family: 'Fredoka', sans-serif;
+            background: #222;
+            padding: 0;
+            margin: 0;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        form {
+            text-align: center;
+        }
+
+        div {
+            margin: 10px;
+        }
+
+        input[type="submit"] {
+            margin-top: 20px;
+            border-radius: 5px;
+            background-color: peachpuff;
+        }
+
+        #background {
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            position: fixed;
+            top: 0;
+            left: 0;
+            overflow: none;
+
+        }
+
+        body {
+            color: white;
+        }
+
+        h2,
+        h3,
+        b {
+            color: peachpuff;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="background"></canvas>
+    <div id="content-container">
+        <form action="game.html" method="get">
+            <h2> BLOBL ROYALE</h2>
+            <div>
+                <label>
+                    WASD player name:<br />
+                    <input type="text" name="WASD">
+                </label>
+            </div>
+            <div>
+                <label>
+                    IJKL player name:<br />
+                    <input type="text" name="IJKL">
+                </label>
+            </div>
+            <div>
+                <label>
+                    NUMPAD player name:<br />
+                    <input type="text" name="NUMPAD">
+                </label>
+            </div>
+            (leave empty if no player)
+            <div>
+                <label>
+                    <input type="checkbox" name="vertical">
+                    Align vertical
+                </label>
+            </div>
+            <div>
+                <input type="submit" value="PLAY">
+            </div>
+        </form>
+
+        <div style="margin-top: 100px;">
+            <h3>Controls:</h3>
+
+            <div>
+                <b>Zoom in with +</b><br />
+                <b>Zoom out with -</b><br />
+            </div>
+            <div>
+                <b>For WASD:</b><br />
+                WASD - movement<br />
+                Q E - rotate<br />
+                SPACE - boost<br />
+            </div>
+            <div>
+                <b>For IJKL:</b><br />
+                IJKL - movement<br />
+                U O - rotate<br />
+                / - boost<br />
+            </div>
+            <div>
+                <b>For NUMPAD:</b><br />
+                8456 - movement<br />
+                7 9 - rotate<br />
+                NUMPAD-ENTER - boost<br />
+            </div>
+
+            You can't eat other players just yet.
+        </div>
+    </div>
+</body>
+
+</html>

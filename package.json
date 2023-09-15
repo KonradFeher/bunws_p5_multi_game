@@ -1,0 +1,11 @@
+{
+  "name": "bunws_p5_multi_game",
+  "module": "index.js",
+  "type": "module",
+  "devDependencies": {
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
