@@ -2,12 +2,19 @@ const socket = new WebSocket("wss://konidev.157451.xyz");
 
 socket.addEventListener("message", (event) => {
   let data = JSON.parse(event.data);
-  onlinePlayers = data.players;
-  data.blobs.forEach((blob) => {
-    const existingBlobsIndex = blobs.findIndex((b) => b.x === blob.x && b.y === blob.y);
-    if (existingBlobsIndex === -1) {
-      blobs.push(new Blob(blob.x, blob.y));
-    }
+  // filter to non-local
+  console.log(data)
+  otherPlayers = data.players.filter((p) => !localPlayers.some((lp) => lp.id === p.id));
+  // parse them into real Players
+  onlinePlayers = otherPlayers.map(
+    (player) => new Player(player.name, player.color, undefined, undefined, false, player.posX, player.posY, player.fuel, player.radius, player.score)
+  );
+
+  // TODO recieve blobs
+  newBlobs = data.blobs.filter((b) => !blobs.some((lb) => lb.id === b.id));
+  newBlobs.forEach((blob) => {
+    console.log("adding new blob")
+    blobs.push(new Blob(blob.id, blob.maxRadius, blob.posX, blob.posY, blob.score, blob.radius));
   });
 });
 
@@ -67,9 +74,9 @@ function setup() {
   pcount = (searchParams.get("WASD") !== "") + (searchParams.get("IJKL") !== "") + (searchParams.get("NUMPAD") !== ""); //temp
   let relSize = useVerticalLayout ? [1, 1 - (pcount - 1) * 0.2] : [1 - (pcount - 1) * 0.2, 1];
 
-  if (searchParams.get("WASD")) localPlayers.push(new Player(searchParams.get("WASD") ?? "Djungelskog", color("Magenta"), WASD, 1, relSize));
-  if (searchParams.get("IJKL")) localPlayers.push(new Player(searchParams.get("IJKL") ?? "Blåhaj", color("MediumSpringGreen"), IJKL, 1, relSize));
-  if (searchParams.get("NUMPAD")) localPlayers.push(new Player(searchParams.get("NUMPAD") ?? "Råtta", color("Tomato"), NUMPAD, 1, relSize));
+  if (searchParams.get("WASD")) localPlayers.push(new Player(searchParams.get("WASD") ?? "Djungelskog", color("Magenta"), WASD, relSize));
+  if (searchParams.get("IJKL")) localPlayers.push(new Player(searchParams.get("IJKL") ?? "Blåhaj", color("MediumSpringGreen"), IJKL, relSize));
+  if (searchParams.get("NUMPAD")) localPlayers.push(new Player(searchParams.get("NUMPAD") ?? "Råtta", color("Tomato"), NUMPAD, relSize));
 
   if (localPlayers.length === 0) select("body").html('<img src="https://i.imgflip.com/7q0o8b.jpg" alt="No players? 💀">');
 
@@ -138,32 +145,42 @@ class Drawable {
 }
 
 class Player extends Drawable {
-  constructor(name, color, keys, scale = 1, relSize) {
+  constructor(name, color, keys, relSize, local = true, posX = undefined, posY = undefined, fuel = undefined, radius = undefined, score = undefined) {
     super();
     this.id = name + new Date().getTime();
 
     this.name = name;
     this.color = color;
 
-    this.gWidth = SIZE * relSize[0];
-    this.gHeight = SIZE * relSize[1];
-    this.scale = scale;
-    this.graphics = createGraphics(this.gWidth, this.gHeight); // hmm: re: online players.
-    this.graphics.noStroke();
-    this.keys = keys;
+    if (local) {
+      this.gWidth = SIZE * relSize[0];
+      this.gHeight = SIZE * relSize[1];
+      this.scale = 1;
+      this.graphics = createGraphics(this.gWidth, this.gHeight); // hmm: re: online players.
+      this.graphics.noStroke();
+      this.keys = keys;
 
-    this.posX = SIZE / 2 + random(-SIZE / 3, SIZE / 3);
-    this.posY = SIZE / 2 + random(-SIZE / 3, SIZE / 3);
+      this.posX = SIZE / 2 + random(-SIZE / 3, SIZE / 3);
+      this.posY = SIZE / 2 + random(-SIZE / 3, SIZE / 3);
 
-    this.fuel = 100;
-    this.boosting = false;
-    this.original_radius = this.radius = 20;
-    this.speed = 3;
-    this.rotation = 0;
-    this.score = 0;
+      this.fuel = 100;
+      this.boosting = false;
+      this.original_radius = this.radius = 20;
+      this.speed = 3;
+      this.rotation = 0;
+      this.score = 0;
+    } else {
+      this.posX = posX;
+      this.posY = posY;
+      this.fuel = fuel;
+      this.radius = radius;
+      this.score = score;
+    }
+    // IDEA: online players are 1 packet behind, always drifting to their next packet's location - not re-constructed every packet.
   }
 
   update() {
+    // should only be run for local players (for now)
     this.rotation += (keysDown.has(this.keys["ROT_LEFT"]) - keysDown.has(this.keys["ROT_RIGHT"])) * 0.05;
 
     let horizontal = keysDown.has(this.keys["RIGHT"]) - keysDown.has(this.keys["LEFT"]); // -1 0 1
@@ -238,16 +255,19 @@ class Player extends Drawable {
 }
 
 class Blob extends Drawable {
-  constructor(x=undefined, y=undefined) {
+  constructor(id, maxRadius, posX, posY, score, fuel) {
     super();
-    this.id = new Date().getTime() + Math.random().toFixed(3);
+    this.id = id;
     this.radius = 0.001;
-    this.score = 1;
-    this.fuel = 20;
-    this.maxRadius = random(3, 8);
-    let padding = this.maxRadius + 6;
-    this.posX = x ?? random(padding, WIDTH - padding);
-    this.posY = y ?? random(padding, HEIGHT - padding);
+    this.score = score; // 1
+    this.fuel = fuel; // 20
+    this.maxRadius = maxRadius;
+    // let padding = this.maxRadius + 6;
+    // this.posX = x ?? random(padding, WIDTH - padding);
+    // this.posY = y ?? random(padding, HEIGHT - padding);
+    this.posX = posX;
+    this.posY = posY;
+
     push();
     colorMode(HSB);
     this.color = color(random(0, 255), 125, 125);
@@ -280,18 +300,33 @@ function logic() {
 function sendState() {
   console.log("sending state to server");
   // console.log({ localPlayers: localPlayers, blobs: blobs });
-  socket.send(JSON.stringify(
-    {
-      players: localPlayers.map(player =>
-        {
-          id: player.id,
-          color: player.color,
-          radius: player.radius,
-          posX: player.posX,
-          poxY: player.poxY
-        }), //TODO: serialize this shiz before sending
-    }
-  ));
+  let payload = {
+    localPlayers: serializePlayers(localPlayers), //send local player array serialized
+    blobIds: blobIds(blobs), //send alive blob id array
+  }
+  console.log(payload);
+  socket.send(
+    JSON.stringify(payload)
+  );
+}
+
+function serializePlayers(players) {
+  return players.map((player) => {
+    return {
+      id: player.id,
+      name: player.name,
+      color: player.color,
+      posX: player.posX,
+      posY: player.posY,
+      fuel: player.fuel,
+      radius: player.radius,
+      score: player.score,
+    };
+  });
+}
+
+function blobIds(blobs) {
+  return blobs.map((blob) => blob.id);
 }
 
 let keysDown = new Set();
@@ -322,8 +357,7 @@ function waver(base, mult, fun, speed = 400) {
   return base + mult * fun(millis() / speed);
 }
 
-
-// IDEA: other players are just blobs... (although this isn't good for leaderboard...)
+// ~~IDEA: other players are just blobs... (although this isn't good for leaderboard...)
 // TODO: fix blobs endlessly spawning
-// TODO: new blob distribution 
+// TODO: new blob distribution
 // IDEA: use sets instead of arrays?

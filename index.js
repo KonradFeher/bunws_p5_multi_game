@@ -1,11 +1,9 @@
 import { ServerWebSocket } from "bun";
-const jokes = require("jester-jokes");
-
-const RED = "\u001b[31m";
-const BLUE = "\u001b[34m";
-const END = "\u001b[0m";
 
 const BROADCAST_TPS = 30;
+const MAX_BLOBS = 20;
+const GAME_SIZE = 720; // TODO: send this value in the handshake
+const PADDING = 10;
 
 function colorLog(color, data) {
   console.log(color + data + END);
@@ -14,16 +12,9 @@ function colorLog(color, data) {
 console.log("Initializing websocket server...");
 let nowServing = [];
 
-let players = [];
-let blobs = [];
-
-for (let i = 0; i < 20; i++) {
-  blobs.push({
-    x: Math.floor(Math.random() * 720),
-    y: Math.floor(Math.random() * 720),
-  });
-  
-}
+let players = new Map();
+let blobs = new Map();
+let blobIndex = 0;
 
 Bun.serve({
   fetch(req, server) {
@@ -40,31 +31,29 @@ Bun.serve({
     open: function (ws) {
       colorLog(RED, "New websocket opened.");
       nowServing.push(ws);
-      // ws.send("omg hi");
     },
+
     message: function (ws, message) {
       colorLog(BLUE, "New message recieved from" + ws.remoteAddress);
-      colorLog(RED, message)
-      let state = JSON.parse(message);
-      state.players.forEach((player) => {
-        const existingPlayerIndex = players.findIndex((p) => p.id === player.id);
-        if (existingPlayerIndex !== -1) {
-          players[existingPlayerIndex] = player;
-        } else {
-          players.push(player);
-        }
+      colorLog(BLUE, message);
+      let recievedState = JSON.parse(message);
+      // handle recieved array of players
+      recievedState.localPlayers.forEach((recievedPlayer) => {
+        players.set(recievedPlayer.id, recievedPlayer);
       });
-      blobs = state.blobs.filter(blob =>
-        blobs.some(blob2 => blob.id === blob2.id)
-      );
+      // recievedState.blobIds.forEach((blobId) => blobs.delete(blobId)); // this is incorrect, these are the blobs we KEEp
+      Array.from(blobs.keys()).forEach(id => {
+        if (!recievedState.blobIds.includes(id))
+          blobs.delete(id);
+        });
     },
+
     close: function (ws, code, message) {
       colorLog(RED, "Websocket closed.");
       const index = nowServing.indexOf(ws);
       if (index !== -1) {
         nowServing.splice(index, 1);
       }
-      //   console.log(message);
     },
   },
 });
@@ -78,24 +67,32 @@ setInterval(broadcastGameState, 1000 / BROADCAST_TPS);
 // }
 
 function broadcastGameState() {
-  console.log(players);
-  if (blobs.length < 10)
-    blobs.push(new Blob());
+  console.log("blobs:" + blobs.size);
+  if (blobs.size < MAX_BLOBS) blobs.set(blobIndex, {
+    id: blobIndex++,
+    maxRadius: 3 + Math.random() * 5,
+    posX: PADDING + Math.random() * (GAME_SIZE - PADDING),
+    posY: PADDING + Math.random() * (GAME_SIZE - PADDING),
+    score: 1,
+    fuel: 20
+    // color init happens client-side //IDEA: color seed
+  });
 
   let state = {
-    players: players,
-    blobs: blobs,
+    players: Array.from(players.values()),
+    blobs: Array.from(blobs.values()),
   };
-  colorLog(BLUE, `Broadcasting game state to ${nowServing.length} players.`);
+  colorLog(RED, state.players, state.blobs)
+  colorLog(BLUE, `Broadcasting game state to ${nowServing.length} sockets.`);
   nowServing.forEach((ws) => {
     ws.send(JSON.stringify(state));
   });
 }
 
-class Drawable {
-  constructor () {}
-  draw(povPlayer) {
-      povPlayer.graphics.fill(this.getColor());
-      povPlayer.graphics.circle(this.posX - povPlayer.posX, this.posY - povPlayer.posY, 2 * this.radius);
-  }
-} 
+const RED = "\u001b[31m";
+const BLUE = "\u001b[34m";
+const END = "\u001b[0m";
+
+//TODO: FIX PLAYER COLOR BUG THING, STORE IT AS HEX INSTEAD OF p5 COLOR
+//TODO: BLOBS KEEP INCREASING CLIENT SIDE 
+//      THIS HAS TO DO WITH PACKET LIFETIME AND RE-INITING BLOBS AFTER EATEN
