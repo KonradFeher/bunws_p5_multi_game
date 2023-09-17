@@ -1,13 +1,9 @@
-import { ServerWebSocket } from "bun";
 
 const BROADCAST_TPS = 30;
 const MAX_BLOBS = 20;
 const GAME_SIZE = 720; // TODO: send this value in the handshake
 const PADDING = 10;
 
-function colorLog(color, data) {
-  console.log(color + data + END);
-}
 
 console.log("Initializing websocket server...");
 let nowServing = [];
@@ -34,18 +30,14 @@ Bun.serve({
     },
 
     message: function (ws, message) {
-      colorLog(BLUE, "New message recieved from" + ws.remoteAddress);
-      colorLog(BLUE, message);
+      // colorLog(BLUE, "New message recieved from" + ws.remoteAddress);
+      // colorLog(BLUE, message);
       let recievedState = JSON.parse(message);
       // handle recieved array of players
       recievedState.localPlayers.forEach((recievedPlayer) => {
         players.set(recievedPlayer.id, recievedPlayer);
       });
-      // recievedState.blobIds.forEach((blobId) => blobs.delete(blobId)); // this is incorrect, these are the blobs we KEEp
-      Array.from(blobs.keys()).forEach(id => {
-        if (!recievedState.blobIds.includes(id))
-          blobs.delete(id);
-        });
+      recievedState.eatenBlobIds.forEach(id => blobs.delete(id));
     },
 
     close: function (ws, code, message) {
@@ -67,7 +59,7 @@ setInterval(broadcastGameState, 1000 / BROADCAST_TPS);
 // }
 
 function broadcastGameState() {
-  console.log("blobs:" + blobs.size);
+  // console.log("blobs:" + blobs.size);
   if (blobs.size < MAX_BLOBS) blobs.set(blobIndex, {
     id: blobIndex++,
     maxRadius: 3 + Math.random() * 5,
@@ -82,8 +74,8 @@ function broadcastGameState() {
     players: Array.from(players.values()),
     blobs: Array.from(blobs.values()),
   };
-  colorLog(RED, state.players, state.blobs)
-  colorLog(BLUE, `Broadcasting game state to ${nowServing.length} sockets.`);
+  // colorLog(RED, state.players, state.blobs)
+  process.stdout.write(BLUE + `Broadcasting game state to ${nowServing.length} socket(s). \r` + END);
   nowServing.forEach((ws) => {
     ws.send(JSON.stringify(state));
   });
@@ -93,6 +85,6 @@ const RED = "\u001b[31m";
 const BLUE = "\u001b[34m";
 const END = "\u001b[0m";
 
-//TODO: FIX PLAYER COLOR BUG THING, STORE IT AS HEX INSTEAD OF p5 COLOR
-//TODO: BLOBS KEEP INCREASING CLIENT SIDE 
-//      THIS HAS TO DO WITH PACKET LIFETIME AND RE-INITING BLOBS AFTER EATEN
+function colorLog(color, data) {
+  console.log((color + data + END).padEnd(80, " "));
+}

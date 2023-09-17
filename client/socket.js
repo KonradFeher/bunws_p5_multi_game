@@ -3,18 +3,19 @@ const socket = new WebSocket("wss://konidev.157451.xyz");
 socket.addEventListener("message", (event) => {
   let data = JSON.parse(event.data);
   // filter to non-local
-  console.log(data)
+  // console.log(data)
   otherPlayers = data.players.filter((p) => !localPlayers.some((lp) => lp.id === p.id));
   // parse them into real Players
   onlinePlayers = otherPlayers.map(
-    (player) => new Player(player.name, player.color, undefined, undefined, false, player.posX, player.posY, player.fuel, player.radius, player.score)
+    (player) => new Player(player.name, player.color, undefined, undefined, false, player.posX, player.posY, player.fuel, player.radius, player.originalRadius, player.score)
   );
 
-  // TODO recieve blobs
-  newBlobs = data.blobs.filter((b) => !blobs.some((lb) => lb.id === b.id));
+  // TODO delete missing blobs
+  blobs = blobs.filter((lb) => data.blobs.some((b) => lb.id === b.id));
+  newBlobs = data.blobs.filter((b) => !eatenBlobIds.includes(b.id) && !blobs.some((lb) => lb.id === b.id));
   newBlobs.forEach((blob) => {
-    console.log("adding new blob")
-    blobs.push(new Blob(blob.id, blob.maxRadius, blob.posX, blob.posY, blob.score, blob.radius));
+    // console.log("adding new blob")s
+    blobs.push(new Blob(blob.id, blob.maxRadius, blob.posX, blob.posY, blob.score, blob.fuel));
   });
 });
 
@@ -32,6 +33,7 @@ let show_scores = true;
 let localPlayers = [];
 let onlinePlayers = [];
 let blobs = [];
+let eatenBlobIds = [];
 
 // key bindings (processed by function cleanKey)
 const WASD = {
@@ -74,9 +76,9 @@ function setup() {
   pcount = (searchParams.get("WASD") !== "") + (searchParams.get("IJKL") !== "") + (searchParams.get("NUMPAD") !== ""); //temp
   let relSize = useVerticalLayout ? [1, 1 - (pcount - 1) * 0.2] : [1 - (pcount - 1) * 0.2, 1];
 
-  if (searchParams.get("WASD")) localPlayers.push(new Player(searchParams.get("WASD") ?? "Djungelskog", color("Magenta"), WASD, relSize));
-  if (searchParams.get("IJKL")) localPlayers.push(new Player(searchParams.get("IJKL") ?? "Blåhaj", color("MediumSpringGreen"), IJKL, relSize));
-  if (searchParams.get("NUMPAD")) localPlayers.push(new Player(searchParams.get("NUMPAD") ?? "Råtta", color("Tomato"), NUMPAD, relSize));
+  if (searchParams.get("WASD")) localPlayers.push(new Player(searchParams.get("WASD") ?? "Djungelskog", "#F22", WASD, relSize));
+  if (searchParams.get("IJKL")) localPlayers.push(new Player(searchParams.get("IJKL") ?? "Blåhaj", "#2F2", IJKL, relSize));
+  if (searchParams.get("NUMPAD")) localPlayers.push(new Player(searchParams.get("NUMPAD") ?? "Råtta", "#22F", NUMPAD, relSize));
 
   if (localPlayers.length === 0) select("body").html('<img src="https://i.imgflip.com/7q0o8b.jpg" alt="No players? 💀">');
 
@@ -127,8 +129,8 @@ function draw() {
     leaderboard = [...localPlayers, ...onlinePlayers].sort((p1, p2) => p2.score - p1.score);
     for (let i = 0; i < leaderboard.length; i++) {
       push();
-      fill(leaderboard[i].color);
-      circle(30, 30 + i * 50, map(leaderboard[i].original_radius, 0, leaderboard[0].original_radius, 0, 35));
+      fill(leaderboard[i].getColor());
+      circle(30, 30 + i * 50, map(leaderboard[i].originalRadius, 0, leaderboard[0].originalRadius, 0, 35));
       pop();
       text(leaderboard[i].name, 60, 32 + i * 50);
     }
@@ -145,7 +147,19 @@ class Drawable {
 }
 
 class Player extends Drawable {
-  constructor(name, color, keys, relSize, local = true, posX = undefined, posY = undefined, fuel = undefined, radius = undefined, score = undefined) {
+  constructor(
+    name,
+    color,
+    keys,
+    relSize,
+    local = true,
+    posX = undefined,
+    posY = undefined,
+    fuel = undefined,
+    radius = undefined,
+    originalRadius = undefined,
+    score = undefined
+  ) {
     super();
     this.id = name + new Date().getTime();
 
@@ -165,7 +179,7 @@ class Player extends Drawable {
 
       this.fuel = 100;
       this.boosting = false;
-      this.original_radius = this.radius = 20;
+      this.originalRadius = this.radius = 20;
       this.speed = 3;
       this.rotation = 0;
       this.score = 0;
@@ -174,6 +188,7 @@ class Player extends Drawable {
       this.posY = posY;
       this.fuel = fuel;
       this.radius = radius;
+      this.originalRadius = originalRadius;
       this.score = score;
     }
     // IDEA: online players are 1 packet behind, always drifting to their next packet's location - not re-constructed every packet.
@@ -190,11 +205,11 @@ class Player extends Drawable {
     if (keysDown.has(this.keys["BOOST"]) && this.fuel > 0) {
       this.fuel -= 1;
       this.boosting = true;
-      this.radius = clamp(this.radius * BOOST_SHRINK, this.original_radius / 4, this.original_radius);
+      this.radius = clamp(this.radius * BOOST_SHRINK, this.originalRadius / 4, this.originalRadius);
       boosting_mult = BOOST_STRENGTH;
     } else {
       this.boosting = false;
-      this.radius = clamp(this.radius * (1 / BOOST_SHRINK), this.original_radius / 4, this.original_radius);
+      this.radius = clamp(this.radius * (1 / BOOST_SHRINK), this.originalRadius / 4, this.originalRadius);
     }
 
     if (horizontal == 0 && useVerticalLayout == 0) return;
@@ -241,12 +256,13 @@ class Player extends Drawable {
   eat(whomst) {
     this.score += whomst.score;
     this.gainFuel(whomst.fuel);
-    this.original_radius += log(1 + whomst.radius) / 10;
+    this.originalRadius += log(1 + whomst.radius) / 10;
+    eatenBlobIds.push(whomst.id);
   }
 
   getColor() {
     // return lerpColor(color(255), this.color, this.fuel / 100);
-    return lerpColor(color(0, 0, 0, 0), this.color, 0.2 + (this.fuel / 100) * 0.8); // less fuel -> less alpha, capped at 10%
+    return lerpColor(color(0, 0, 0, 0), color(this.color), 0.2 + (this.fuel / 100) * 0.8); // less fuel -> less alpha, capped at 10%
   }
 
   gainFuel(amount) {
@@ -298,16 +314,14 @@ function logic() {
 }
 
 function sendState() {
-  console.log("sending state to server");
+  // console.log("sending state to server");
   // console.log({ localPlayers: localPlayers, blobs: blobs });
   let payload = {
     localPlayers: serializePlayers(localPlayers), //send local player array serialized
-    blobIds: blobIds(blobs), //send alive blob id array
-  }
-  console.log(payload);
-  socket.send(
-    JSON.stringify(payload)
-  );
+    eatenBlobIds: eatenBlobIds, //send eaten blob id array
+  };
+  // console.log(payload);
+  socket.send(JSON.stringify(payload));
 }
 
 function serializePlayers(players) {
@@ -320,14 +334,15 @@ function serializePlayers(players) {
       posY: player.posY,
       fuel: player.fuel,
       radius: player.radius,
+      originalRadius: player.originalRadius,
       score: player.score,
     };
   });
 }
 
-function blobIds(blobs) {
-  return blobs.map((blob) => blob.id);
-}
+// function blobIds(blobs) {
+//   return blobs.map((blob) => blob.id);
+// }
 
 let keysDown = new Set();
 
@@ -356,8 +371,3 @@ function clamp(x, lower, higher) {
 function waver(base, mult, fun, speed = 400) {
   return base + mult * fun(millis() / speed);
 }
-
-// ~~IDEA: other players are just blobs... (although this isn't good for leaderboard...)
-// TODO: fix blobs endlessly spawning
-// TODO: new blob distribution
-// IDEA: use sets instead of arrays?
