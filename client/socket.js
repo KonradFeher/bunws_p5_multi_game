@@ -1,36 +1,4 @@
-const socket = new WebSocket("wss://konidev.157451.xyz/ws");
-
-socket.addEventListener("message", (event) => {
-  let data = JSON.parse(event.data);
-  // filter to non-local
-  // console.log(data)
-  otherPlayers = data.players.filter((p) => !localPlayers.some((lp) => lp.id === p.id));
-  // parse them into real Players
-  onlinePlayers = otherPlayers.map(
-    (player) =>
-      new Player(
-        player.name,
-        player.color,
-        undefined,
-        undefined,
-        false,
-        player.posX,
-        player.posY,
-        player.fuel,
-        player.radius,
-        player.originalRadius,
-        player.score
-      )
-  );
-
-  // TODO delete missing blobs
-  blobs = blobs.filter((lb) => data.blobs.some((b) => lb.id === b.id));
-  newBlobs = data.blobs.filter((b) => !eatenBlobIds.includes(b.id) && !blobs.some((lb) => lb.id === b.id));
-  newBlobs.forEach((blob) => {
-    // console.log("adding new blob")s
-    blobs.push(new Blob(blob.id, blob.maxRadius, blob.posX, blob.posY, blob.score, blob.fuel));
-  });
-});
+let socket;
 
 const SEND_TPS = 30;
 const LOGIC_TPS = 60;
@@ -89,9 +57,12 @@ function setup() {
   pcount = (searchParams.get("WASD") !== "") + (searchParams.get("IJKL") !== "") + (searchParams.get("NUMPAD") !== ""); //temp
   let relSize = useVerticalLayout ? [1, 1 - (pcount - 1) * 0.2] : [1 - (pcount - 1) * 0.2, 1];
 
-  if (searchParams.get("WASD")) localPlayers.push(new Player(searchParams.get("WASD"), searchParams.get("WASDcolor") ?? getRandomBrightColor(), WASD, relSize));
-  if (searchParams.get("IJKL")) localPlayers.push(new Player(searchParams.get("IJKL"), searchParams.get("IJKLcolor") ??getRandomBrightColor(), IJKL, relSize));
-  if (searchParams.get("NUMPAD")) localPlayers.push(new Player(searchParams.get("NUMPAD"), searchParams.get("NUMPADcolor") ??getRandomBrightColor(), NUMPAD, relSize));
+  if (searchParams.get("WASD"))
+    localPlayers.push(new Player(searchParams.get("WASD"), searchParams.get("WASDcolor") ?? getRandomBrightColor(), WASD, relSize));
+  if (searchParams.get("IJKL"))
+    localPlayers.push(new Player(searchParams.get("IJKL"), searchParams.get("IJKLcolor") ?? getRandomBrightColor(), IJKL, relSize));
+  if (searchParams.get("NUMPAD"))
+    localPlayers.push(new Player(searchParams.get("NUMPAD"), searchParams.get("NUMPADcolor") ?? getRandomBrightColor(), NUMPAD, relSize));
 
   if (localPlayers.length === 0) select("body").html('<img src="https://i.imgflip.com/7q0o8b.jpg" alt="No players? 💀">');
 
@@ -109,6 +80,8 @@ function setup() {
       gameCanvas
     );
 
+  socket = new WebSocket("wss://konidev.157451.xyz/ws");
+  addSocketListeners();
   noStroke();
   logic();
   setInterval(logic, 1000 / LOGIC_TPS);
@@ -330,11 +303,14 @@ function sendState() {
   // console.log("sending state to server");
   // console.log({ localPlayers: localPlayers, blobs: blobs });
   let payload = {
+    type: "BRDC",
     localPlayers: serializePlayers(localPlayers), //send local player array serialized
     eatenBlobIds: eatenBlobIds, //send eaten blob id array
   };
   // console.log(payload);
-  socket.send(JSON.stringify(payload));
+  try {
+    socket.send(JSON.stringify(payload));
+  } catch(e) {}
 }
 
 function serializePlayers(players) {
@@ -396,3 +372,66 @@ function getRandomBrightColor() {
 
   return colorString;
 }
+
+function addSocketListeners() {
+  socket.addEventListener("open", (e) => {
+    // alert("[open] Connection established");
+    socket.send(
+      JSON.stringify({
+        type: "PDEC",
+        localPlayerIds: localPlayers.map((p) => p.id),
+      })
+    );
+  });
+
+  socket.addEventListener("message", (event) => {
+    let data = JSON.parse(event.data);
+    switch (data.type) {
+      case "INIT":
+        // TODO: game is already initialized by this point... wait with setup until after...
+        console.log(data.gameSize);
+        break;
+
+      case "BRDC":
+        // filter to non-local
+        // console.log(data)
+        otherPlayers = data.players.filter((p) => !localPlayers.some((lp) => lp.id === p.id));
+        // parse them into real Players
+        onlinePlayers = otherPlayers.map(
+          (player) =>
+            new Player(
+              player.name,
+              player.color,
+              undefined,
+              undefined,
+              false,
+              player.posX,
+              player.posY,
+              player.fuel,
+              player.radius,
+              player.originalRadius,
+              player.score
+            )
+        );
+
+        // TODO delete missing blobs
+        blobs = blobs.filter((lb) => data.blobs.some((b) => lb.id === b.id));
+        newBlobs = data.blobs.filter((b) => !eatenBlobIds.includes(b.id) && !blobs.some((lb) => lb.id === b.id));
+        newBlobs.forEach((blob) => {
+          // console.log("adding new blob")s
+          blobs.push(new Blob(blob.id, blob.maxRadius, blob.posX, blob.posY, blob.score, blob.fuel));
+        });
+        break;
+
+      default:
+        console.log("Unknown socket message type:", data.type);
+    }
+  });
+}
+
+/**
+ * message types:
+ * INIT - initializing message sent to clients
+ * PDEC - player declarations received by server
+ * BRDC - continuous updates going both ways
+ */
