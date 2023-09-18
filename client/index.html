@@ -55,6 +55,11 @@
             color: white;
         }
 
+        input[type="color"] {
+            display: block;
+            margin: 5px auto;
+        }
+
         h2,
         h3,
         b {
@@ -72,18 +77,21 @@
                 <label>
                     WASD player name:<br />
                     <input type="text" name="WASD">
+                    <input type="color" name="WASDcolor" value="#FF2266">
                 </label>
             </div>
             <div>
                 <label>
                     IJKL player name:<br />
                     <input type="text" name="IJKL">
+                    <input type="color" name="IJKLcolor" value="#22FF66">
                 </label>
             </div>
             <div>
                 <label>
                     NUMPAD player name:<br />
                     <input type="text" name="NUMPAD">
+                    <input type="color" name="NUMPADcolor" value="#6622FF">
                 </label>
             </div>
             (leave empty if no player)

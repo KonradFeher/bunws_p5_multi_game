@@ -20,7 +20,7 @@ Bun.serve({
       //   "Set-Cookie": `SessionId=${sessionId}`,
       // },
     });
-    return new Response("Hehe");
+    return new Response("upgrade failed >:(");
   },
 
   websocket: {

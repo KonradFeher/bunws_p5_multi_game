@@ -1,4 +1,4 @@
-const socket = new WebSocket("wss://konidev.157451.xyz");
+const socket = new WebSocket("wss://konidev.157451.xyz/ws");
 
 socket.addEventListener("message", (event) => {
   let data = JSON.parse(event.data);
@@ -7,7 +7,20 @@ socket.addEventListener("message", (event) => {
   otherPlayers = data.players.filter((p) => !localPlayers.some((lp) => lp.id === p.id));
   // parse them into real Players
   onlinePlayers = otherPlayers.map(
-    (player) => new Player(player.name, player.color, undefined, undefined, false, player.posX, player.posY, player.fuel, player.radius, player.originalRadius, player.score)
+    (player) =>
+      new Player(
+        player.name,
+        player.color,
+        undefined,
+        undefined,
+        false,
+        player.posX,
+        player.posY,
+        player.fuel,
+        player.radius,
+        player.originalRadius,
+        player.score
+      )
   );
 
   // TODO delete missing blobs
@@ -76,9 +89,9 @@ function setup() {
   pcount = (searchParams.get("WASD") !== "") + (searchParams.get("IJKL") !== "") + (searchParams.get("NUMPAD") !== ""); //temp
   let relSize = useVerticalLayout ? [1, 1 - (pcount - 1) * 0.2] : [1 - (pcount - 1) * 0.2, 1];
 
-  if (searchParams.get("WASD")) localPlayers.push(new Player(searchParams.get("WASD") ?? "Djungelskog", "#F22", WASD, relSize));
-  if (searchParams.get("IJKL")) localPlayers.push(new Player(searchParams.get("IJKL") ?? "Blåhaj", "#2F2", IJKL, relSize));
-  if (searchParams.get("NUMPAD")) localPlayers.push(new Player(searchParams.get("NUMPAD") ?? "Råtta", "#22F", NUMPAD, relSize));
+  if (searchParams.get("WASD")) localPlayers.push(new Player(searchParams.get("WASD"), searchParams.get("WASDcolor") ?? getRandomBrightColor(), WASD, relSize));
+  if (searchParams.get("IJKL")) localPlayers.push(new Player(searchParams.get("IJKL"), searchParams.get("IJKLcolor") ??getRandomBrightColor(), IJKL, relSize));
+  if (searchParams.get("NUMPAD")) localPlayers.push(new Player(searchParams.get("NUMPAD"), searchParams.get("NUMPADcolor") ??getRandomBrightColor(), NUMPAD, relSize));
 
   if (localPlayers.length === 0) select("body").html('<img src="https://i.imgflip.com/7q0o8b.jpg" alt="No players? 💀">');
 
@@ -370,4 +383,16 @@ function clamp(x, lower, higher) {
 
 function waver(base, mult, fun, speed = 400) {
   return base + mult * fun(millis() / speed);
+}
+
+function getRandomBrightColor() {
+  // Generate random values for R, G, and B components
+  const r = Math.floor(Math.random() * 256); // Random value between 0 and 255
+  const g = Math.floor(Math.random() * 256); // Random value between 0 and 255
+  const b = Math.floor(Math.random() * 256); // Random value between 0 and 255
+
+  // Convert the values to a hexadecimal string and format it as "#RRGGBB"
+  const colorString = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+
+  return colorString;
 }
