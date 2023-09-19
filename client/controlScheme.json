@@ -1,0 +1,29 @@
+{
+    "WASD": {
+        "UP": "W",
+        "LEFT": "A",
+        "DOWN": "S",
+        "RIGHT": "D",
+        "ROT_LEFT": "Q",
+        "ROT_RIGHT": "E",
+        "BOOST": "SPACE"
+    },
+    "IJKL": {
+        "UP": "I",
+        "LEFT": "J",
+        "DOWN": "K",
+        "RIGHT": "L",
+        "ROT_LEFT": "U",
+        "ROT_RIGHT": "O",
+        "BOOST": "SLASH"
+    },
+    "NUMPAD": {
+        "UP": "NUMPAD8",
+        "LEFT": "NUMPAD4",
+        "DOWN": "NUMPAD5",
+        "RIGHT": "NUMPAD6",
+        "ROT_LEFT": "NUMPAD7",
+        "ROT_RIGHT": "NUMPAD9",
+        "BOOST": "NUMPADENTER"
+    }
+}

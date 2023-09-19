@@ -77,8 +77,8 @@ function broadcastGameState() {
     blobs.set(blobIndex, {
       id: blobIndex++,
       maxRadius: 3 + Math.random() * 5,
-      posX: PADDING + Math.random() * (GAME_SIZE - PADDING),
-      posY: PADDING + Math.random() * (GAME_SIZE - PADDING),
+      posX: PADDING + Math.random() * (GAME_SIZE - 2 * PADDING),
+      posY: PADDING + Math.random() * (GAME_SIZE - 2 * PADDING),
       score: 1,
       fuel: 20,
       // color init happens client-side //IDEA: color seed
@@ -101,8 +101,16 @@ const BLUE = "\u001b[34m";
 const END = "\u001b[0m";
 
 function colorLog(color, data) {
-  console.log((color + data + END).padEnd(80, " "));
+  console.log((color + getCurrentTime() +  data + END).padEnd(80, " "));
 }
+
+function getCurrentTime() {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes} - `;
+}
+
 
 /**
  * message types:

@@ -16,55 +16,38 @@ let onlinePlayers = [];
 let blobs = [];
 let eatenBlobIds = [];
 
-// key bindings (processed by function cleanKey)
-const WASD = {
-  UP: "W",
-  LEFT: "A",
-  DOWN: "S",
-  RIGHT: "D",
-  ROT_LEFT: "Q",
-  ROT_RIGHT: "E",
-  BOOST: "SPACE",
-};
-const IJKL = {
-  UP: "I",
-  LEFT: "J",
-  DOWN: "K",
-  RIGHT: "L",
-  ROT_LEFT: "U",
-  ROT_RIGHT: "O",
-  BOOST: "SLASH",
-};
-const NUMPAD = {
-  UP: "NUMPAD8",
-  LEFT: "NUMPAD4",
-  DOWN: "NUMPAD5",
-  RIGHT: "NUMPAD6",
-  ROT_LEFT: "NUMPAD7",
-  ROT_RIGHT: "NUMPAD9",
-  BOOST: "NUMPADENTER",
-};
-
 let useVerticalLayout = false;
 let searchParams;
+let controlScheme;
+
 function preload() {
   searchParams = new URLSearchParams(window.location.search);
   useVerticalLayout = searchParams.has("vertical");
+  loadJSON(
+    "controlScheme.json",
+    (data) => {
+      controlScheme = data;
+    },
+    (error) => {
+      console.error(error);
+    }
+  );
 }
 
 function setup() {
   frameRate(60);
-  pcount = (searchParams.get("WASD") !== "") + (searchParams.get("IJKL") !== "") + (searchParams.get("NUMPAD") !== ""); //temp
+  pcount = (searchParams.get("WASD") !== "") + (searchParams.get("IJKL") !== "") + (searchParams.get("NUMP") !== ""); //temp
   let relSize = useVerticalLayout ? [1, 1 - (pcount - 1) * 0.2] : [1 - (pcount - 1) * 0.2, 1];
 
   if (searchParams.get("WASD"))
-    localPlayers.push(new Player(searchParams.get("WASD"), searchParams.get("WASDcolor") ?? getRandomBrightColor(), WASD, relSize));
+    localPlayers.push(new Player(searchParams.get("WASD"), searchParams.get("WASDcolor"), controlScheme.WASD, relSize));
   if (searchParams.get("IJKL"))
-    localPlayers.push(new Player(searchParams.get("IJKL"), searchParams.get("IJKLcolor") ?? getRandomBrightColor(), IJKL, relSize));
-  if (searchParams.get("NUMPAD"))
-    localPlayers.push(new Player(searchParams.get("NUMPAD"), searchParams.get("NUMPADcolor") ?? getRandomBrightColor(), NUMPAD, relSize));
+    localPlayers.push(new Player(searchParams.get("IJKL"), searchParams.get("IJKLcolor"), controlScheme.IJKL, relSize));
+  if (searchParams.get("NUMP"))
+    localPlayers.push(new Player(searchParams.get("NUMP"), searchParams.get("NUMPcolor"), controlScheme.NUMP, relSize));
 
-  if (localPlayers.length === 0) select("body").html('<img src="https://i.imgflip.com/7q0o8b.jpg" alt="No players? 💀">');
+  if (localPlayers.length === 0)
+    select("body").html('<img src="https://i.imgflip.com/7q0o8b.jpg" alt="No players? 💀">');
 
   let gameCanvas = document.querySelector("#game");
   if (useVerticalLayout)
@@ -156,8 +139,7 @@ class Player extends Drawable {
       this.gWidth = SIZE * relSize[0];
       this.gHeight = SIZE * relSize[1];
       this.scale = 1;
-      this.graphics = createGraphics(this.gWidth, this.gHeight); // hmm: re: online players.
-      this.graphics.noStroke();
+      this.graphics = createGraphics(this.gWidth, this.gHeight);
       this.keys = keys;
 
       this.posX = SIZE / 2 + random(-SIZE / 3, SIZE / 3);
@@ -310,7 +292,7 @@ function sendState() {
   // console.log(payload);
   try {
     socket.send(JSON.stringify(payload));
-  } catch(e) {}
+  } catch (e) {}
 }
 
 function serializePlayers(players) {
@@ -368,7 +350,9 @@ function getRandomBrightColor() {
   const b = Math.floor(Math.random() * 256); // Random value between 0 and 255
 
   // Convert the values to a hexadecimal string and format it as "#RRGGBB"
-  const colorString = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+  const colorString = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b
+    .toString(16)
+    .padStart(2, "0")}`;
 
   return colorString;
 }
