@@ -17,7 +17,7 @@
         "ROT_RIGHT": "O",
         "BOOST": "SLASH"
     },
-    "NUMPAD": {
+    "NUMP": {
         "UP": "NUMPAD8",
         "LEFT": "NUMPAD4",
         "DOWN": "NUMPAD5",

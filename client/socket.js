@@ -3,6 +3,8 @@ let socket;
 const SEND_TPS = 30;
 const LOGIC_TPS = 60;
 const CANVAS_SIZE = 720;
+let BROADCAST_TPS;
+let LAST_PKG;
 let GAME_WIDTH;
 let GAME_HEIGHT;
 
@@ -74,6 +76,7 @@ function runSetup() {
 }
 
 function draw() {
+  noStroke();
   let x = 0;
   let y = 0;
   localPlayers.forEach((player) => {
@@ -110,6 +113,7 @@ function draw() {
 }
 
 // GAME LOGIC
+
 class Drawable {
   constructor() {}
   draw(povPlayer) {
@@ -130,19 +134,22 @@ class Player extends Drawable {
     fuel = undefined,
     radius = undefined,
     originalRadius = undefined,
-    score = undefined
+    score = undefined,
+    id = undefined
   ) {
     super();
-    this.id = name + new Date().getTime();
+    this.id = id ?? name + new Date().getTime();
 
     this.name = name;
     this.color = color;
 
-    if (local) {
+    this.local = local;
+    if (this.local) {
       this.gWidth = CANVAS_SIZE * relSize[0];
       this.gHeight = CANVAS_SIZE * relSize[1];
       this.scale = 1;
       this.graphics = createGraphics(this.gWidth, this.gHeight);
+      this.graphics.noStroke();
       this.keys = keys;
 
       this.posX = GAME_WIDTH / 2 + random(-GAME_WIDTH / 3, GAME_WIDTH / 3);
@@ -162,43 +169,69 @@ class Player extends Drawable {
       this.originalRadius = originalRadius;
       this.score = score;
     }
-    // IDEA: online players are 1 packet behind, always drifting to their next packet's location - not re-constructed every packet.
+  }
+
+  setNextState(x, y, radius, fuel, score) {
+    if (this.posX && this.posY) {
+      this.prevX = this.posX;
+      this.nextX = x;
+      this.prevY = this.posY;
+      this.nextY = y;
+
+      this.fuel = fuel;
+      this.radius = radius;
+      this.score = score;
+      // this.prevRadius = this.radius;
+      // this.nextRadius = radius;
+      // this.nextFuel = fuel;
+      // this.prevFuel = this.radius;
+    }
   }
 
   update() {
-    // should only be run for local players (for now)
-    this.rotation += (keysDown.has(this.keys["ROT_LEFT"]) - keysDown.has(this.keys["ROT_RIGHT"])) * 0.05;
+    if (this.local) {
+      this.rotation += (keysDown.has(this.keys["ROT_LEFT"]) - keysDown.has(this.keys["ROT_RIGHT"])) * 0.05;
 
-    let horizontal = keysDown.has(this.keys["RIGHT"]) - keysDown.has(this.keys["LEFT"]); // -1 0 1
-    let useVerticalLayout = keysDown.has(this.keys["DOWN"]) - keysDown.has(this.keys["UP"]); // -1 0 1
+      let horizontal = keysDown.has(this.keys["RIGHT"]) - keysDown.has(this.keys["LEFT"]); // -1 0 1
+      let useVerticalLayout = keysDown.has(this.keys["DOWN"]) - keysDown.has(this.keys["UP"]); // -1 0 1
 
-    let boosting_mult = 1;
-    if (keysDown.has(this.keys["BOOST"]) && this.fuel > 0) {
-      this.fuel -= 1;
-      this.boosting = true;
-      this.radius = clamp(this.radius * BOOST_SHRINK, this.originalRadius / 4, this.originalRadius);
-      boosting_mult = BOOST_STRENGTH;
+      let boosting_mult = 1;
+      if (keysDown.has(this.keys["BOOST"]) && this.fuel > 0) {
+        this.fuel -= 1;
+        this.boosting = true;
+        this.radius = clamp(this.radius * BOOST_SHRINK, this.originalRadius / 4, this.originalRadius);
+        boosting_mult = BOOST_STRENGTH;
+      } else {
+        this.boosting = false;
+        this.radius = clamp(this.radius * (1 / BOOST_SHRINK), this.originalRadius / 4, this.originalRadius);
+      }
+
+      if (horizontal == 0 && useVerticalLayout == 0) return;
+
+      let angles = [];
+
+      if (horizontal === -1) angles.push(PI);
+      else if (horizontal === 1) angles.push(0);
+      if (useVerticalLayout === -1) angles.push(PI / 2);
+      else if (useVerticalLayout === 1) angles.push((3 * PI) / 2);
+
+      let movementAngle = this.rotation;
+      if (horizontal === 1 && useVerticalLayout === 1) movementAngle += -PI / 4;
+      else movementAngle += angles.reduce((acc, angle) => acc + angle, 0) / angles.length;
+
+      let padding = this.radius + 5;
+      this.posX = clamp(this.posX + this.speed * boosting_mult * cos(movementAngle), padding, GAME_WIDTH - padding);
+      this.posY = clamp(this.posY + this.speed * boosting_mult * -sin(movementAngle), padding, GAME_HEIGHT - padding);
     } else {
-      this.boosting = false;
-      this.radius = clamp(this.radius * (1 / BOOST_SHRINK), this.originalRadius / 4, this.originalRadius);
+      if (this.nextX || this.nextY) {
+        // smooth linear sliding to new position (until next expected pkg arrival)
+        let elapsed = map(new Date().getTime(), LAST_PKG, LAST_PKG + 1000 / BROADCAST_TPS, 0, 1);
+        this.posX = this.prevX + (this.nextX - this.prevX) * elapsed;
+        this.posY = this.prevY + (this.nextY - this.prevY) * elapsed;
+        // this.radius = this.prevRadius + (this.nextRadius - this.prevRadius) * elapsed;
+        // this.fuel = this.prevFuel + (this.nextFuel - this.prevFuel) * elapsed;
+      }
     }
-
-    if (horizontal == 0 && useVerticalLayout == 0) return;
-
-    let angles = [];
-
-    if (horizontal === -1) angles.push(PI);
-    else if (horizontal === 1) angles.push(0);
-    if (useVerticalLayout === -1) angles.push(PI / 2);
-    else if (useVerticalLayout === 1) angles.push((3 * PI) / 2);
-
-    let movementAngle = this.rotation;
-    if (horizontal === 1 && useVerticalLayout === 1) movementAngle += -PI / 4;
-    else movementAngle += angles.reduce((acc, angle) => acc + angle, 0) / angles.length;
-
-    let padding = this.radius + 5;
-    this.posX = clamp(this.posX + this.speed * boosting_mult * cos(movementAngle), padding, GAME_WIDTH - padding);
-    this.posY = clamp(this.posY + this.speed * boosting_mult * -sin(movementAngle), padding, GAME_HEIGHT - padding);
   }
 
   updateGraphics() {
@@ -280,8 +313,7 @@ function logic() {
     player.update();
     blobs = blobs.filter((blob) => blob.update(player));
   });
-  // while (blobs.length < 10)
-  //     blobs.push(new Blob());
+  onlinePlayers.forEach((player) => player.update());
 }
 
 // WEBSOCKET PAYLOADS
@@ -298,8 +330,9 @@ function addSocketListeners() {
     let data = JSON.parse(event.data);
     switch (data.type) {
       case "INIT":
-        console.log(data.gameSize);
-        GAME_WIDTH = GAME_HEIGHT = data.gameSize;
+        LAST_PKG = new Date().getTime();
+        GAME_WIDTH = GAME_HEIGHT = data.GAME_SIZE;
+        BROADCAST_TPS = data.BROADCAST_TPS;
         runSetup();
         socket.send(
           JSON.stringify({
@@ -310,32 +343,54 @@ function addSocketListeners() {
         break;
 
       case "BRDC":
+        LAST_PKG = new Date().getTime();
         // filter to non-local
         // console.log(data)
         otherPlayers = data.players.filter((p) => !localPlayers.some((lp) => lp.id === p.id));
         // parse them into real Players
-        onlinePlayers = otherPlayers.map(
-          (player) =>
-            new Player(
-              player.name,
-              player.color,
-              undefined,
-              undefined,
-              false,
-              player.posX,
-              player.posY,
-              player.fuel,
-              player.radius,
-              player.originalRadius,
-              player.score
-            )
-        );
+        otherPlayers.forEach((recievedPlayer) => {
+          let found = false;
+          onlinePlayers.forEach((existingPlayer) => {
+            if (existingPlayer.id === recievedPlayer.id) {
+              existingPlayer.setNextState(
+                recievedPlayer.posX,
+                recievedPlayer.posY,
+                recievedPlayer.radius,
+                recievedPlayer.fuel,
+                recievedPlayer.score
+              );
+              found = true;
+            }
+          });
+          if (!found) {
 
-        // TODO delete missing blobs
+            onlinePlayers.push(
+              new Player(
+                recievedPlayer.name,
+                recievedPlayer.color,
+                undefined,
+                undefined,
+                false,
+                recievedPlayer.posX,
+                recievedPlayer.posY,
+                recievedPlayer.fuel,
+                recievedPlayer.radius,
+                recievedPlayer.originalRadius,
+                recievedPlayer.score,
+                recievedPlayer.id
+              )
+            );
+          }
+        });
+        for (let i = 0; i < onlinePlayers.length; i++) {
+          if (!data.players.some(recievedPlayer => recievedPlayer.id === onlinePlayers[i].id)) {
+            onlinePlayers.splice(i--);
+          }
+        }
+
         blobs = blobs.filter((lb) => data.blobs.some((b) => lb.id === b.id));
         newBlobs = data.blobs.filter((b) => !eatenBlobIds.includes(b.id) && !blobs.some((lb) => lb.id === b.id));
         newBlobs.forEach((blob) => {
-          // console.log("adding new blob")s
           blobs.push(new Blob(blob.id, blob.maxRadius, blob.posX, blob.posY, blob.score, blob.fuel));
         });
         break;
@@ -421,5 +476,3 @@ function serializePlayers(players) {
     };
   });
 }
-
-// TODO: separate canvas size, graphic size and game size

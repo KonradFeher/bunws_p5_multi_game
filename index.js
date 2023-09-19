@@ -39,8 +39,8 @@ Bun.serve({
       ws.send(
         JSON.stringify({
           type: "INIT",
-          gameSize: GAME_SIZE,
-          foo: "bar",
+          GAME_SIZE: GAME_SIZE,
+          BROADCAST_TPS: BROADCAST_TPS,
         })
       );
     },
