@@ -2,9 +2,9 @@ let socket;
 
 const SEND_TPS = 30;
 const LOGIC_TPS = 60;
-const SIZE = 720; //unchangable client-side
-const WIDTH = SIZE;
-const HEIGHT = SIZE;
+const CANVAS_SIZE = 720;
+let GAME_WIDTH;
+let GAME_HEIGHT;
 
 const BOOST_STRENGTH = 4;
 const BOOST_SHRINK = 0.99; // ~0.99
@@ -32,9 +32,13 @@ function preload() {
       console.error(error);
     }
   );
+  socket = new WebSocket("wss://konidev.157451.xyz/ws");
+  addSocketListeners();
 }
 
-function setup() {
+// P5 SETUP HAPPENS AFTER INIT RECIEVED
+
+function runSetup() {
   frameRate(60);
   pcount = (searchParams.get("WASD") !== "") + (searchParams.get("IJKL") !== "") + (searchParams.get("NUMP") !== ""); //temp
   let relSize = useVerticalLayout ? [1, 1 - (pcount - 1) * 0.2] : [1 - (pcount - 1) * 0.2, 1];
@@ -52,19 +56,17 @@ function setup() {
   let gameCanvas = document.querySelector("#game");
   if (useVerticalLayout)
     createCanvas(
-      SIZE,
+      CANVAS_SIZE,
       localPlayers.reduce((acc, player) => acc + player.gHeight, 0),
       gameCanvas
     );
   else
     createCanvas(
       localPlayers.reduce((acc, player) => acc + player.gWidth, 0),
-      SIZE,
+      CANVAS_SIZE,
       gameCanvas
     );
 
-  socket = new WebSocket("wss://konidev.157451.xyz/ws");
-  addSocketListeners();
   noStroke();
   logic();
   setInterval(logic, 1000 / LOGIC_TPS);
@@ -107,6 +109,7 @@ function draw() {
   }
 }
 
+// GAME LOGIC
 class Drawable {
   constructor() {}
   draw(povPlayer) {
@@ -136,14 +139,14 @@ class Player extends Drawable {
     this.color = color;
 
     if (local) {
-      this.gWidth = SIZE * relSize[0];
-      this.gHeight = SIZE * relSize[1];
+      this.gWidth = CANVAS_SIZE * relSize[0];
+      this.gHeight = CANVAS_SIZE * relSize[1];
       this.scale = 1;
       this.graphics = createGraphics(this.gWidth, this.gHeight);
       this.keys = keys;
 
-      this.posX = SIZE / 2 + random(-SIZE / 3, SIZE / 3);
-      this.posY = SIZE / 2 + random(-SIZE / 3, SIZE / 3);
+      this.posX = GAME_WIDTH / 2 + random(-GAME_WIDTH / 3, GAME_WIDTH / 3);
+      this.posY = GAME_HEIGHT / 2 + random(-GAME_HEIGHT / 3, GAME_HEIGHT / 3);
 
       this.fuel = 100;
       this.boosting = false;
@@ -194,8 +197,8 @@ class Player extends Drawable {
     else movementAngle += angles.reduce((acc, angle) => acc + angle, 0) / angles.length;
 
     let padding = this.radius + 5;
-    this.posX = clamp(this.posX + this.speed * boosting_mult * cos(movementAngle), padding, WIDTH - padding);
-    this.posY = clamp(this.posY + this.speed * boosting_mult * -sin(movementAngle), padding, HEIGHT - padding);
+    this.posX = clamp(this.posX + this.speed * boosting_mult * cos(movementAngle), padding, GAME_WIDTH - padding);
+    this.posY = clamp(this.posY + this.speed * boosting_mult * -sin(movementAngle), padding, GAME_HEIGHT - padding);
   }
 
   updateGraphics() {
@@ -206,7 +209,7 @@ class Player extends Drawable {
     this.graphics.scale(this.scale);
 
     this.graphics.fill(10, 0, waver(20, 10, cos));
-    this.graphics.rect(0 - this.posX, 0 - this.posY, WIDTH, HEIGHT, 2 * this.radius);
+    this.graphics.rect(0 - this.posX, 0 - this.posY, GAME_WIDTH, GAME_HEIGHT, 2 * this.radius);
 
     blobs.forEach((blob) => blob.draw(this));
 
@@ -247,8 +250,8 @@ class Blob extends Drawable {
     this.fuel = fuel; // 20
     this.maxRadius = maxRadius;
     // let padding = this.maxRadius + 6;
-    // this.posX = x ?? random(padding, WIDTH - padding);
-    // this.posY = y ?? random(padding, HEIGHT - padding);
+    // this.posX = x ?? random(padding, GAME_WIDTH - padding);
+    // this.posY = y ?? random(padding, GAME_HEIGHT - padding);
     this.posX = posX;
     this.posY = posY;
 
@@ -281,99 +284,29 @@ function logic() {
   //     blobs.push(new Blob());
 }
 
-function sendState() {
-  // console.log("sending state to server");
-  // console.log({ localPlayers: localPlayers, blobs: blobs });
-  let payload = {
-    type: "BRDC",
-    localPlayers: serializePlayers(localPlayers), //send local player array serialized
-    eatenBlobIds: eatenBlobIds, //send eaten blob id array
-  };
-  // console.log(payload);
-  try {
-    socket.send(JSON.stringify(payload));
-  } catch (e) {}
-}
+// WEBSOCKET PAYLOADS
 
-function serializePlayers(players) {
-  return players.map((player) => {
-    return {
-      id: player.id,
-      name: player.name,
-      color: player.color,
-      posX: player.posX,
-      posY: player.posY,
-      fuel: player.fuel,
-      radius: player.radius,
-      originalRadius: player.originalRadius,
-      score: player.score,
-    };
-  });
-}
-
-// function blobIds(blobs) {
-//   return blobs.map((blob) => blob.id);
-// }
-
-let keysDown = new Set();
-
-function cleanKey(keyEvent) {
-  return keyEvent.code.replace(/^Key([A-Z])/, "$1").toUpperCase();
-}
-
-function keyPressed(e) {
-  e.preventDefault();
-  if (e.key === "-") return localPlayers.forEach((player) => (player.scale *= 0.9));
-  if (e.key === "+") return localPlayers.forEach((player) => (player.scale *= 1 / 0.9));
-  // console.log(cleanKey(e))
-  keysDown.add(cleanKey(e));
-}
-
-function keyReleased(e) {
-  keysDown.delete(cleanKey(e));
-}
-
-function clamp(x, lower, higher) {
-  if (x < lower) return lower;
-  if (x > higher) return higher;
-  return x;
-}
-
-function waver(base, mult, fun, speed = 400) {
-  return base + mult * fun(millis() / speed);
-}
-
-function getRandomBrightColor() {
-  // Generate random values for R, G, and B components
-  const r = Math.floor(Math.random() * 256); // Random value between 0 and 255
-  const g = Math.floor(Math.random() * 256); // Random value between 0 and 255
-  const b = Math.floor(Math.random() * 256); // Random value between 0 and 255
-
-  // Convert the values to a hexadecimal string and format it as "#RRGGBB"
-  const colorString = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b
-    .toString(16)
-    .padStart(2, "0")}`;
-
-  return colorString;
-}
+/**
+ * message types:
+ * INIT - initializing message sent to clients
+ * PDEC - player declarations received by server
+ * BRDC - continuous updates going both ways
+ */
 
 function addSocketListeners() {
-  socket.addEventListener("open", (e) => {
-    // alert("[open] Connection established");
-    socket.send(
-      JSON.stringify({
-        type: "PDEC",
-        localPlayerIds: localPlayers.map((p) => p.id),
-      })
-    );
-  });
-
   socket.addEventListener("message", (event) => {
     let data = JSON.parse(event.data);
     switch (data.type) {
       case "INIT":
-        // TODO: game is already initialized by this point... wait with setup until after...
         console.log(data.gameSize);
+        GAME_WIDTH = GAME_HEIGHT = data.gameSize;
+        runSetup();
+        socket.send(
+          JSON.stringify({
+            type: "PDEC",
+            localPlayerIds: localPlayers.map((p) => p.id),
+          })
+        );
         break;
 
       case "BRDC":
@@ -413,9 +346,80 @@ function addSocketListeners() {
   });
 }
 
-/**
- * message types:
- * INIT - initializing message sent to clients
- * PDEC - player declarations received by server
- * BRDC - continuous updates going both ways
- */
+function sendState() {
+  // console.log("sending state to server");
+  // console.log({ localPlayers: localPlayers, blobs: blobs });
+  let payload = {
+    type: "BRDC",
+    localPlayers: serializePlayers(localPlayers), //send local player array serialized
+    eatenBlobIds: eatenBlobIds, //send eaten blob id array
+  };
+  // console.log(payload);
+  try {
+    socket.send(JSON.stringify(payload));
+  } catch (e) {}
+}
+
+// HANDLING INPUTS
+
+let keysDown = new Set();
+
+function cleanKey(keyEvent) {
+  return keyEvent.code.replace(/^Key([A-Z])/, "$1").toUpperCase();
+}
+
+function keyPressed(e) {
+  e.preventDefault();
+  if (e.key === "-") return localPlayers.forEach((player) => (player.scale *= 0.9));
+  if (e.key === "+") return localPlayers.forEach((player) => (player.scale *= 1 / 0.9));
+  // console.log(cleanKey(e))
+  keysDown.add(cleanKey(e));
+}
+
+function keyReleased(e) {
+  keysDown.delete(cleanKey(e));
+}
+
+// VARIOUS HELPER FUNCTIONS
+
+function clamp(x, lower, higher) {
+  if (x < lower) return lower;
+  if (x > higher) return higher;
+  return x;
+}
+
+function waver(base, mult, fun, speed = 400) {
+  return base + mult * fun(millis() / speed);
+}
+
+function getRandomBrightColor() {
+  // Generate random values for R, G, and B components
+  const r = Math.floor(Math.random() * 256); // Random value between 0 and 255
+  const g = Math.floor(Math.random() * 256); // Random value between 0 and 255
+  const b = Math.floor(Math.random() * 256); // Random value between 0 and 255
+
+  // Convert the values to a hexadecimal string and format it as "#RRGGBB"
+  const colorString = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b
+    .toString(16)
+    .padStart(2, "0")}`;
+
+  return colorString;
+}
+
+function serializePlayers(players) {
+  return players.map((player) => {
+    return {
+      id: player.id,
+      name: player.name,
+      color: player.color,
+      posX: player.posX,
+      posY: player.posY,
+      fuel: player.fuel,
+      radius: player.radius,
+      originalRadius: player.originalRadius,
+      score: player.score,
+    };
+  });
+}
+
+// TODO: separate canvas size, graphic size and game size

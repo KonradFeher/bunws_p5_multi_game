@@ -1,6 +1,6 @@
 const BROADCAST_TPS = 30;
-const MAX_BLOBS = 20;
-const GAME_SIZE = 720; // TODO: send this value in the handshake
+const GAME_SIZE = 2000;
+const MAX_BLOBS = GAME_SIZE * GAME_SIZE * 4e-5;
 const PADDING = 25;
 
 console.log("Initializing websocket server...");
@@ -10,6 +10,16 @@ let wsPlayerMap = new Map();
 let players = new Map();
 let blobs = new Map();
 let blobIndex = 0;
+
+
+// WEBSOCKET SERVER
+
+/**
+ * message types:
+ * INIT - initializing message sent to clients
+ * PDEC - player declarations post-init
+ * BRDC - continuous updates going both ways
+ */
 
 Bun.serve({
   fetch(req, server) {
@@ -55,13 +65,15 @@ Bun.serve({
       if (index !== -1) {
         nowServing.splice(index, 1);
       }
-      wsPlayerMap.get(ws).forEach(playerId => {
+      wsPlayerMap.get(ws).forEach((playerId) => {
         players.delete(playerId);
       });
       wsPlayerMap.delete(ws);
     },
   },
 });
+
+// BROADCAST
 
 setInterval(broadcastGameState, 1000 / BROADCAST_TPS);
 
@@ -96,25 +108,19 @@ function broadcastGameState() {
   });
 }
 
+// VARIOUS HELPER FUNCTIONS
+
 const RED = "\u001b[31m";
 const BLUE = "\u001b[34m";
 const END = "\u001b[0m";
 
 function colorLog(color, data) {
-  console.log((color + getCurrentTime() +  data + END).padEnd(80, " "));
+  console.log((color + getCurrentTime() + data + END).padEnd(80, " "));
 }
 
 function getCurrentTime() {
   const now = new Date();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
   return `${hours}:${minutes} - `;
 }
-
-
-/**
- * message types:
- * INIT - initializing message sent to clients
- * PDEC - player declarations received by server
- * BRDC - continuous updates going both ways
- */
