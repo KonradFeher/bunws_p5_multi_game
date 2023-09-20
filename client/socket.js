@@ -104,7 +104,7 @@ function draw() {
     for (let i = 0; i < leaderboard.length; i++) {
       push();
       fill(leaderboard[i].getColor());
-      circle(30, 30 + i * 50, map(leaderboard[i].originalRadius, 0, leaderboard[0].originalRadius, 0, 35));
+      circle(30, 30 + i * 50, map(leaderboard[i].originalRadius, 5, leaderboard[0].originalRadius, 0, 35, true));
       pop();
       text(leaderboard[i].name, 60, 32 + i * 50);
     }
@@ -171,7 +171,7 @@ class Player extends Drawable {
     }
   }
 
-  setNextState(x, y, radius, fuel, score) {
+  setNextState(x, y, radius, fuel, score, originalRadius) {
     if (this.posX && this.posY) {
       this.prevX = this.posX;
       this.nextX = x;
@@ -181,6 +181,7 @@ class Player extends Drawable {
       this.fuel = fuel;
       this.radius = radius;
       this.score = score;
+      this.originalRadius = originalRadius;
       // this.prevRadius = this.radius;
       // this.nextRadius = radius;
       // this.nextFuel = fuel;
@@ -225,7 +226,7 @@ class Player extends Drawable {
     } else {
       if (this.nextX || this.nextY) {
         // smooth linear sliding to new position (until next expected pkg arrival)
-        let elapsed = map(new Date().getTime(), LAST_PKG, LAST_PKG + 1000 / BROADCAST_TPS, 0, 1);
+        let elapsed = map(new Date().getTime(), LAST_PKG, LAST_PKG + 1000 / BROADCAST_TPS, 0, 1, true);
         this.posX = this.prevX + (this.nextX - this.prevX) * elapsed;
         this.posY = this.prevY + (this.nextY - this.prevY) * elapsed;
         // this.radius = this.prevRadius + (this.nextRadius - this.prevRadius) * elapsed;
@@ -357,7 +358,8 @@ function addSocketListeners() {
                 recievedPlayer.posY,
                 recievedPlayer.radius,
                 recievedPlayer.fuel,
-                recievedPlayer.score
+                recievedPlayer.score,
+                recievedPlayer.originalRadius
               );
               found = true;
             }
@@ -476,3 +478,5 @@ function serializePlayers(players) {
     };
   });
 }
+
+// TODO: when window is out of focus - game falls behind, doesn't recieve new packages properly
