@@ -19,12 +19,14 @@ let blobs = [];
 let eatenBlobIds = [];
 
 let useVerticalLayout = false;
+let useJoystickMode = false;
 let searchParams;
 let controlScheme;
 
 function preload() {
   searchParams = new URLSearchParams(window.location.search);
   useVerticalLayout = searchParams.has("vertical");
+  useJoystickMode = searchParams.has("joystick");
   loadJSON(
     "controlScheme.json",
     (data) => {
@@ -51,9 +53,14 @@ function runSetup() {
     localPlayers.push(new Player(searchParams.get("IJKL"), searchParams.get("IJKLcolor"), controlScheme.IJKL, relSize));
   if (searchParams.get("NUMP"))
     localPlayers.push(new Player(searchParams.get("NUMP"), searchParams.get("NUMPcolor"), controlScheme.NUMP, relSize));
+  if (searchParams.get("MOUS"))
+    localPlayers.push(new Player(searchParams.get("MOUS"), searchParams.get("MOUScolor"), "MOUS", relSize));
 
   if (localPlayers.length === 0)
     select("body").html('<img src="https://i.imgflip.com/7q0o8b.jpg" alt="No players? 💀">');
+
+  let backgroundElement = document.querySelector("#background");
+  backgroundCanvas = createCanvas(windowWidth, windowHeight, backgroundElement);
 
   let gameCanvas = document.querySelector("#game");
   if (useVerticalLayout)
@@ -69,6 +76,20 @@ function runSetup() {
       gameCanvas
     );
 
+  let x = 0;
+  let y = 0;
+  localPlayers.forEach((player) => {
+    player.canvasX = x;
+    player.canvasY = y;
+    if (useVerticalLayout) y += player.gHeight;
+    else x += player.gWidth;
+  });
+
+  document.querySelector("body").addEventListener("contextmenu", function (e) {
+    e.preventDefault();
+    return false;
+  });
+
   noStroke();
   logic();
   setInterval(logic, 1000 / LOGIC_TPS);
@@ -76,20 +97,15 @@ function runSetup() {
 }
 
 function draw() {
-  noStroke();
-  let x = 0;
-  let y = 0;
   localPlayers.forEach((player) => {
     player.updateGraphics();
-    image(player.graphics, x, y);
+    image(player.graphics, player.canvasX, player.canvasY);
     push();
     noFill();
     stroke("#551071");
     strokeWeight(2);
-    rect(x, y, player.gWidth, player.gHeight);
+    rect(player.canvasX, player.canvasY, player.gWidth, player.gHeight);
     pop();
-    if (useVerticalLayout) y += player.gHeight;
-    else x += player.gWidth;
   });
 
   // show scores
@@ -109,6 +125,10 @@ function draw() {
       text(leaderboard[i].name, 60, 32 + i * 50);
     }
     pop();
+  }
+
+  if (useJoystickMode && lmbIsPressed) {
+    drawJoystick(50, 60);
   }
 }
 
@@ -191,21 +211,23 @@ class Player extends Drawable {
 
   update() {
     if (this.local) {
+      let padding = this.radius + 5;
+      if (this.keys === "MOUS") {
+        let boostMult = this.boost(rmbIsPressed || touchCount >= 2);
+        let angle = 0;
+        if (lmbIsPressed) {
+          if (useJoystickMode && joystick.angle) angle = joystick.angle;
+          else angle = angleOf(mouseY, this.canvasY + this.gHeight / 2, mouseX, this.canvasX + this.gWidth / 2);
+          this.move(angle, boostMult);
+        }
+        return;
+      }
       this.rotation += (keysDown.has(this.keys["ROT_LEFT"]) - keysDown.has(this.keys["ROT_RIGHT"])) * 0.05;
 
       let horizontal = keysDown.has(this.keys["RIGHT"]) - keysDown.has(this.keys["LEFT"]); // -1 0 1
       let useVerticalLayout = keysDown.has(this.keys["DOWN"]) - keysDown.has(this.keys["UP"]); // -1 0 1
 
-      let boosting_mult = 1;
-      if (keysDown.has(this.keys["BOOST"]) && this.fuel > 0) {
-        this.fuel -= 1;
-        this.boosting = true;
-        this.radius = clamp(this.radius * BOOST_SHRINK, this.originalRadius / 4, this.originalRadius);
-        boosting_mult = BOOST_STRENGTH;
-      } else {
-        this.boosting = false;
-        this.radius = clamp(this.radius * (1 / BOOST_SHRINK), this.originalRadius / 4, this.originalRadius);
-      }
+      let boostMult = this.boost(keysDown.has(this.keys["BOOST"]));
 
       if (horizontal == 0 && useVerticalLayout == 0) return;
 
@@ -220,19 +242,45 @@ class Player extends Drawable {
       if (horizontal === 1 && useVerticalLayout === 1) movementAngle += -PI / 4;
       else movementAngle += angles.reduce((acc, angle) => acc + angle, 0) / angles.length;
 
-      let padding = this.radius + 5;
-      this.posX = clamp(this.posX + this.speed * boosting_mult * cos(movementAngle), padding, GAME_WIDTH - padding);
-      this.posY = clamp(this.posY + this.speed * boosting_mult * -sin(movementAngle), padding, GAME_HEIGHT - padding);
-    } else {
-      if (this.nextX || this.nextY) {
-        // smooth linear sliding to new position (until next expected pkg arrival)
-        let elapsed = map(new Date().getTime(), LAST_PKG, LAST_PKG + 1000 / BROADCAST_TPS, 0, 1, true);
-        this.posX = this.prevX + (this.nextX - this.prevX) * elapsed;
-        this.posY = this.prevY + (this.nextY - this.prevY) * elapsed;
-        // this.radius = this.prevRadius + (this.nextRadius - this.prevRadius) * elapsed;
-        // this.fuel = this.prevFuel + (this.nextFuel - this.prevFuel) * elapsed;
-      }
+      this.move(movementAngle, boostMult);
+
+      return;
     }
+
+    if (this.nextX || this.nextY) {
+      // smooth linear sliding to new position (until next expected pkg arrival)
+      let elapsed = map(new Date().getTime(), LAST_PKG, LAST_PKG + 1000 / BROADCAST_TPS, 0, 1, true);
+      this.posX = this.prevX + (this.nextX - this.prevX) * elapsed;
+      this.posY = this.prevY + (this.nextY - this.prevY) * elapsed;
+      // this.radius = this.prevRadius + (this.nextRadius - this.prevRadius) * elapsed;
+      // this.fuel = this.prevFuel + (this.nextFuel - this.prevFuel) * elapsed;
+    }
+  }
+
+  move(angle, multiplier) {
+    let padding = this.radius + 3;
+    this.posX = clamp(this.posX + this.speed * multiplier * cos(angle), padding, GAME_WIDTH - padding);
+    this.posY = clamp(this.posY + this.speed * multiplier * -sin(angle), padding, GAME_HEIGHT - padding);
+  }
+
+  grow() {
+    this.radius = clamp(this.radius * (1 / BOOST_SHRINK), this.originalRadius / 4, this.originalRadius);
+  }
+
+  shrink() {
+    this.radius = clamp(this.radius * BOOST_SHRINK, this.originalRadius / 4, this.originalRadius);
+  }
+
+  boost(condition) {
+    if (this.fuel < 1 || !condition) {
+      this.boosting = false;
+      this.grow();
+      return 1;
+    }
+    this.fuel -= 1;
+    this.boosting = true;
+    this.shrink();
+    return BOOST_STRENGTH;
   }
 
   updateGraphics() {
@@ -310,6 +358,8 @@ class Blob extends Drawable {
 }
 
 function logic() {
+  updateJoystickAngle();
+  console.log(touches);
   localPlayers.forEach((player) => {
     player.update();
     blobs = blobs.filter((blob) => blob.update(player));
@@ -346,7 +396,6 @@ function addSocketListeners() {
       case "BRDC":
         LAST_PKG = new Date().getTime();
         // filter to non-local
-        // console.log(data)
         otherPlayers = data.players.filter((p) => !localPlayers.some((lp) => lp.id === p.id));
         // parse them into real Players
         otherPlayers.forEach((recievedPlayer) => {
@@ -365,7 +414,6 @@ function addSocketListeners() {
             }
           });
           if (!found) {
-
             onlinePlayers.push(
               new Player(
                 recievedPlayer.name,
@@ -385,7 +433,7 @@ function addSocketListeners() {
           }
         });
         for (let i = 0; i < onlinePlayers.length; i++) {
-          if (!data.players.some(recievedPlayer => recievedPlayer.id === onlinePlayers[i].id)) {
+          if (!data.players.some((recievedPlayer) => recievedPlayer.id === onlinePlayers[i].id)) {
             onlinePlayers.splice(i--);
           }
         }
@@ -404,14 +452,11 @@ function addSocketListeners() {
 }
 
 function sendState() {
-  // console.log("sending state to server");
-  // console.log({ localPlayers: localPlayers, blobs: blobs });
   let payload = {
     type: "BRDC",
     localPlayers: serializePlayers(localPlayers), //send local player array serialized
     eatenBlobIds: eatenBlobIds, //send eaten blob id array
   };
-  // console.log(payload);
   try {
     socket.send(JSON.stringify(payload));
   } catch (e) {}
@@ -429,7 +474,6 @@ function keyPressed(e) {
   e.preventDefault();
   if (e.key === "-") return localPlayers.forEach((player) => (player.scale *= 0.9));
   if (e.key === "+") return localPlayers.forEach((player) => (player.scale *= 1 / 0.9));
-  // console.log(cleanKey(e))
   keysDown.add(cleanKey(e));
 }
 
@@ -437,7 +481,86 @@ function keyReleased(e) {
   keysDown.delete(cleanKey(e));
 }
 
+// MOUSE INPUTS
+
+let joystick = {
+  originX: undefined,
+  originY: undefined,
+  angle: undefined,
+};
+
+let rmbIsPressed = false;
+let lmbIsPressed = false;
+let touches;
+let touchCount = 0;
+
+function touchStarted(e) {
+  e.preventDefault();
+  touchCount++;
+  if (e.touches) touches = e.touches;
+
+  if (e.button === 2) {
+    rmbIsPressed = true;
+    return false;
+  } else if (e.button === 0 || touchCount === 1) {
+    lmbIsPressed = true;
+    joystick.originX = mouseX;
+    joystick.originY = mouseY;
+    return false;
+  }
+  return false;
+}
+
+function touchMoved(e) {
+  if (e.touches) touches = e.touches;
+}
+
+function touchEnded(e) {
+  e.preventDefault();
+  touchCount--;
+  if (e.touches) touches = undefined;
+  if (e.button === 2) {
+    rmbIsPressed = false;
+    return false;
+  }
+  console.log(e);
+  if (e.button === 0 || touchCount === 0) {
+    lmbIsPressed = false;
+    joystick = {
+      originX: undefined,
+      originY: undefined,
+      angle: undefined,
+    };
+    return false;
+  }
+  return false;
+}
+
+function updateJoystickAngle() {
+  if (touches && touches.length >= 2) {
+    let closestIndex = 0;
+    let minimumDist = dist(joystick.originX, joystick.originY, touches[0].clientX, touches[0].clientY);
+    for (let i = 1; i < touches.length; ++i) {
+      let d = dist(joystick.originX, joystick.originY, touches[i].clientX, touches[i].clientY);
+      if (d < minimumDist) {
+        minimumDist = d;
+        closestIndex = i;
+      }
+    }
+    joystick.angle = angleOf(
+      touches[closestIndex].clientY,
+      joystick.originY,
+      touches[closestIndex].clientX,
+      joystick.originX
+    );
+  } else joystick.angle = angleOf(mouseY, joystick.originY, mouseX, joystick.originX);
+}
+
 // VARIOUS HELPER FUNCTIONS
+
+function angleOf(y1, y2, x1, x2) {
+  return -Math.atan2(y1 - y2, x1 - x2);
+}
 
 function clamp(x, lower, higher) {
   if (x < lower) return lower;
@@ -479,4 +602,42 @@ function serializePlayers(players) {
   });
 }
 
+function drawJoystick(circleRadius, ringRadius) {
+  push();
+  fill("#BB4444");
+
+  if (ringRadius / 2 < dist(joystick.originX, joystick.originY, mouseX, mouseY)) {
+    let cappedX = joystick.originX + (ringRadius / 2) * cos(joystick.angle);
+    let cappedY = joystick.originY - (ringRadius / 2) * sin(joystick.angle);
+    circle(cappedX, cappedY, circleRadius);
+    noFill();
+    strokeWeight(5);
+    stroke("#BB4444");
+    // line(cappedX, cappedY, joystick.originX, joystick.originY);
+  } else {
+    circle(mouseX, mouseY, circleRadius);
+    noFill();
+
+    strokeWeight(5);
+    stroke("#BB4444");
+    // line(mouseX, mouseY, joystick.originX, joystick.originY);
+  }
+  circle(joystick.originX, joystick.originY, ringRadius);
+
+  pop();
+}
+
+// fire bg canvas resize 100ms after window stops resizing
+let fireResize;
+window.addEventListener("resize", () => {
+  clearTimeout(fireResize);
+  fireResize = setTimeout(() => {
+    backgroundCanvas = resizeCanvas(windowWidth, windowHeight);
+  }, 50);
+});
+
 // TODO: when window is out of focus - game falls behind, doesn't recieve new packages properly
+// TODO: cleanup
+// TODO: maybe just always keep the first touch as direction, and the second signals the boost??? (makes so much sense now lol?)
+// TODO: optimize TPS counters for weaker devices somehow
+// TODO: fullscreen the game canvas, disable overflow - ensure client touch coordinates lining up with canvas coordinates (or make alternative calculations)
