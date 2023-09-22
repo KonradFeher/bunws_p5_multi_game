@@ -22,6 +22,7 @@ let useVerticalLayout = false;
 let useJoystickMode = false;
 let searchParams;
 let controlScheme;
+let fireResize;
 
 function preload() {
   searchParams = new URLSearchParams(window.location.search);
@@ -44,8 +45,12 @@ function preload() {
 
 function runSetup() {
   frameRate(60);
-  pcount = (searchParams.get("WASD") !== "") + (searchParams.get("IJKL") !== "") + (searchParams.get("NUMP") !== ""); //temp
-  let relSize = useVerticalLayout ? [1, 1 - (pcount - 1) * 0.2] : [1 - (pcount - 1) * 0.2, 1];
+  pcount =
+    (searchParams.get("WASD") !== "") +
+    (searchParams.get("IJKL") !== "") +
+    (searchParams.get("NUMP") !== "") +
+    (searchParams.get("MOUS") !== "");
+  let relSize = useVerticalLayout ? [1, 1 / pcount] : [1 / pcount, 1];
 
   if (searchParams.get("WASD"))
     localPlayers.push(new Player(searchParams.get("WASD"), searchParams.get("WASDcolor"), controlScheme.WASD, relSize));
@@ -63,18 +68,7 @@ function runSetup() {
   backgroundCanvas = createCanvas(windowWidth, windowHeight, backgroundElement);
 
   let gameCanvas = document.querySelector("#game");
-  if (useVerticalLayout)
-    createCanvas(
-      CANVAS_SIZE,
-      localPlayers.reduce((acc, player) => acc + player.gHeight, 0),
-      gameCanvas
-    );
-  else
-    createCanvas(
-      localPlayers.reduce((acc, player) => acc + player.gWidth, 0),
-      CANVAS_SIZE,
-      gameCanvas
-    );
+  createCanvas(windowWidth, windowHeight, gameCanvas);
 
   let x = 0;
   let y = 0;
@@ -90,6 +84,24 @@ function runSetup() {
     return false;
   });
 
+  window.addEventListener("resize", () => {
+    clearTimeout(fireResize);
+    fireResize = setTimeout(() => {
+      resizeCanvas(windowWidth, windowHeight);
+      console.log("reinit");
+      localPlayers.forEach((p) => p.initGraphics());
+
+      let x = 0;
+      let y = 0;
+      localPlayers.forEach((player) => {
+        player.canvasX = x;
+        player.canvasY = y;
+        if (useVerticalLayout) y += player.gHeight;
+        else x += player.gWidth;
+      });
+    }, 25);
+  });
+
   noStroke();
   logic();
   setInterval(logic, 1000 / LOGIC_TPS);
@@ -97,6 +109,8 @@ function runSetup() {
 }
 
 function draw() {
+  background("#222");
+
   localPlayers.forEach((player) => {
     player.updateGraphics();
     image(player.graphics, player.canvasX, player.canvasY);
@@ -162,14 +176,11 @@ class Player extends Drawable {
 
     this.name = name;
     this.color = color;
+    this.relSize = relSize;
 
     this.local = local;
     if (this.local) {
-      this.gWidth = CANVAS_SIZE * relSize[0];
-      this.gHeight = CANVAS_SIZE * relSize[1];
-      this.scale = 1;
-      this.graphics = createGraphics(this.gWidth, this.gHeight);
-      this.graphics.noStroke();
+      this.initGraphics();
       this.keys = keys;
 
       this.posX = GAME_WIDTH / 2 + random(-GAME_WIDTH / 3, GAME_WIDTH / 3);
@@ -189,6 +200,14 @@ class Player extends Drawable {
       this.originalRadius = originalRadius;
       this.score = score;
     }
+  }
+
+  initGraphics() {
+    this.gWidth = windowWidth * (this.relSize[0] ?? 1);
+    this.gHeight = windowHeight * (this.relSize[1] ?? 1);
+    this.scale = 1;
+    this.graphics = createGraphics(this.gWidth, this.gHeight);
+    this.graphics.noStroke();
   }
 
   setNextState(x, y, radius, fuel, score, originalRadius) {
@@ -359,7 +378,6 @@ class Blob extends Drawable {
 
 function logic() {
   updateJoystickAngle();
-  console.log(touches);
   localPlayers.forEach((player) => {
     player.update();
     blobs = blobs.filter((blob) => blob.update(player));
@@ -496,8 +514,10 @@ let touchCount = 0;
 
 function touchStarted(e) {
   e.preventDefault();
-  touchCount++;
-  if (e.touches) touches = e.touches;
+  if (e.touches) {
+    touches = e.touches;
+    touchCount++;
+  }
 
   if (e.button === 2) {
     rmbIsPressed = true;
@@ -517,13 +537,15 @@ function touchMoved(e) {
 
 function touchEnded(e) {
   e.preventDefault();
-  touchCount--;
-  if (e.touches) touches = undefined;
+  if (e.touches)
+    if (e.touches) {
+      touches = undefined;
+      touchCount--;
+    }
   if (e.button === 2) {
     rmbIsPressed = false;
     return false;
   }
-  console.log(e);
   if (e.button === 0 || touchCount === 0) {
     lmbIsPressed = false;
     joystick = {
@@ -628,13 +650,6 @@ function drawJoystick(circleRadius, ringRadius) {
 }
 
 // fire bg canvas resize 100ms after window stops resizing
-let fireResize;
-window.addEventListener("resize", () => {
-  clearTimeout(fireResize);
-  fireResize = setTimeout(() => {
-    backgroundCanvas = resizeCanvas(windowWidth, windowHeight);
-  }, 50);
-});
 
 // TODO: when window is out of focus - game falls behind, doesn't recieve new packages properly
 // TODO: cleanup

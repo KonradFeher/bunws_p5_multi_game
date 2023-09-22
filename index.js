@@ -65,6 +65,7 @@ Bun.serve({
       if (index !== -1) {
         nowServing.splice(index, 1);
       }
+      if(!wsPlayerMap.has(ws)) return;
       wsPlayerMap.get(ws).forEach((playerId) => {
         players.delete(playerId);
       });
@@ -124,3 +125,7 @@ function getCurrentTime() {
   const minutes = String(now.getMinutes()).padStart(2, "0");
   return `${hours}:${minutes} - `;
 }
+
+
+// TODO: remove websockets that haven't replied in a while
+// TODO: put connections on "pause" and "resume" them  
