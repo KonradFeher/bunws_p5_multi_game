@@ -89,12 +89,7 @@ function broadcastGameState() {
   if (blobs.size < MAX_BLOBS)
     blobs.set(blobIndex, {
       id: blobIndex++,
-      maxRadius: 3 + Math.random() * 5,
-      posX: PADDING + Math.random() * (GAME_SIZE - 2 * PADDING),
-      posY: PADDING + Math.random() * (GAME_SIZE - 2 * PADDING),
-      score: 1,
-      fuel: 20,
-      // color init happens client-side //IDEA: color seed
+      seed: Math.random() * 1e10
     });
 
   let state = {

@@ -2,7 +2,6 @@ let socket;
 
 const SEND_TPS = 30;
 const LOGIC_TPS = 60;
-const CANVAS_SIZE = 720;
 let BROADCAST_TPS;
 let LAST_PKG;
 let GAME_WIDTH;
@@ -10,6 +9,7 @@ let GAME_HEIGHT;
 
 const BOOST_STRENGTH = 4;
 const BOOST_SHRINK = 0.99; // ~0.99
+const PADDING = 25;
 
 let show_scores = true;
 
@@ -141,6 +141,10 @@ class Drawable {
     povPlayer.graphics.fill(this.getColor());
     povPlayer.graphics.circle(this.posX - povPlayer.posX, this.posY - povPlayer.posY, 2 * this.radius);
   }
+
+  getColor() {
+    throw new Error("getColor not implemented for object: ", this);
+  }
 }
 
 class Player extends Drawable {
@@ -229,7 +233,7 @@ class Player extends Drawable {
         }
         return;
       }
-      
+
       this.rotation += (keysDown.has(this.keys["ROT_LEFT"]) - keysDown.has(this.keys["ROT_RIGHT"])) * 0.05;
 
       let horizontal = keysDown.has(this.keys["RIGHT"]) - keysDown.has(this.keys["LEFT"]); // -1 0 1
@@ -332,23 +336,24 @@ class Player extends Drawable {
 }
 
 class Blob extends Drawable {
-  constructor(id, maxRadius, posX, posY, score, fuel) {
+  constructor(id, seed) {
     super();
+
+    randomSeed(seed);
     this.id = id;
+
     this.radius = 0.001;
-    this.score = score; // 1
-    this.fuel = fuel; // 20
-    this.maxRadius = maxRadius;
-    // let padding = this.maxRadius + 6;
-    // this.posX = x ?? random(padding, GAME_WIDTH - padding);
-    // this.posY = y ?? random(padding, GAME_HEIGHT - padding);
-    this.posX = posX;
-    this.posY = posY;
+    this.score = 1;
+    this.fuel = 20;
+    this.maxRadius = 3 + random() * 5;
+    this.posX = random(PADDING, GAME_WIDTH - PADDING);
+    this.posY = random(PADDING, GAME_HEIGHT - PADDING);
 
     push();
     colorMode(HSB);
     this.color = color(random(0, 255), 125, 125);
     pop();
+    randomSeed(Math.random() * 1e10);
   }
 
   update(player) {
@@ -362,6 +367,18 @@ class Blob extends Drawable {
 
   getColor() {
     return this.color;
+  }
+}
+
+class Spikey extends Drawable {
+  constructor(seed) {
+    randomSeed(seed);
+    this.posX = random(PADDING, GAME_WIDTH - PADDING);
+    this.posY = random(PADDING, GAME_HEIGHT - PADDING);
+
+    //TODO: acceleration etc etc etc etc don't forget delta time etc etc etc
+
+    randomSeed(Math.random() * 1e10);
   }
 }
 
@@ -448,7 +465,7 @@ function addSocketListeners() {
         blobs = blobs.filter((lb) => data.blobs.some((b) => lb.id === b.id));
         newBlobs = data.blobs.filter((b) => !eatenBlobIds.includes(b.id) && !blobs.some((lb) => lb.id === b.id));
         newBlobs.forEach((blob) => {
-          blobs.push(new Blob(blob.id, blob.maxRadius, blob.posX, blob.posY, blob.score, blob.fuel));
+          blobs.push(new Blob(blob.id, blob.seed));
         });
         break;
 
