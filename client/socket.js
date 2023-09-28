@@ -45,12 +45,16 @@ function preload() {
 
 function runSetup() {
   frameRate(60);
-  pcount =
+
+  let playerCount =
     (searchParams.get("WASD") !== "") +
     (searchParams.get("IJKL") !== "") +
     (searchParams.get("NUMP") !== "") +
     (searchParams.get("MOUS") !== "");
-  let relSize = useVerticalLayout ? [1, 1 / pcount] : [1 / pcount, 1];
+  let relSize = [1, 1];
+
+  if (playerCount === 4) relSize = [0.5, 0.5];
+  else relSize = useVerticalLayout ? [1, 1 / playerCount] : [1 / playerCount, 1];
 
   if (searchParams.get("WASD"))
     localPlayers.push(new Player(searchParams.get("WASD"), searchParams.get("WASDcolor"), controlScheme.WASD, relSize));
@@ -64,20 +68,8 @@ function runSetup() {
   if (localPlayers.length === 0)
     select("body").html('<img src="https://i.imgflip.com/7q0o8b.jpg" alt="No players? 💀">');
 
-  let backgroundElement = document.querySelector("#background");
-  backgroundCanvas = createCanvas(windowWidth, windowHeight, backgroundElement);
-
   let gameCanvas = document.querySelector("#game");
   createCanvas(windowWidth, windowHeight, gameCanvas);
-
-  let x = 0;
-  let y = 0;
-  localPlayers.forEach((player) => {
-    player.canvasX = x;
-    player.canvasY = y;
-    if (useVerticalLayout) y += player.gHeight;
-    else x += player.gWidth;
-  });
 
   document.querySelector("body").addEventListener("contextmenu", function (e) {
     e.preventDefault();
@@ -91,16 +83,11 @@ function runSetup() {
       console.log("reinit");
       localPlayers.forEach((p) => p.initGraphics());
 
-      let x = 0;
-      let y = 0;
-      localPlayers.forEach((player) => {
-        player.canvasX = x;
-        player.canvasY = y;
-        if (useVerticalLayout) y += player.gHeight;
-        else x += player.gWidth;
-      });
+      initCanvasPositions();
     }, 25);
   });
+
+  initCanvasPositions();
 
   noStroke();
   logic();
@@ -181,6 +168,7 @@ class Player extends Drawable {
     this.local = local;
     if (this.local) {
       this.initGraphics();
+      this.scale = 1;
       this.keys = keys;
 
       this.posX = GAME_WIDTH / 2 + random(-GAME_WIDTH / 3, GAME_WIDTH / 3);
@@ -203,9 +191,8 @@ class Player extends Drawable {
   }
 
   initGraphics() {
-    this.gWidth = windowWidth * (this.relSize[0] ?? 1);
-    this.gHeight = windowHeight * (this.relSize[1] ?? 1);
-    this.scale = 1;
+    this.gWidth = windowWidth * this.relSize[0];
+    this.gHeight = windowHeight * this.relSize[1];
     this.graphics = createGraphics(this.gWidth, this.gHeight);
     this.graphics.noStroke();
   }
@@ -221,6 +208,8 @@ class Player extends Drawable {
       this.radius = radius;
       this.score = score;
       this.originalRadius = originalRadius;
+
+      // feels JANK
       // this.prevRadius = this.radius;
       // this.nextRadius = radius;
       // this.nextFuel = fuel;
@@ -230,7 +219,6 @@ class Player extends Drawable {
 
   update() {
     if (this.local) {
-      let padding = this.radius + 5;
       if (this.keys === "MOUS") {
         let boostMult = this.boost(rmbIsPressed || touchCount >= 2);
         let angle = 0;
@@ -241,24 +229,25 @@ class Player extends Drawable {
         }
         return;
       }
+      
       this.rotation += (keysDown.has(this.keys["ROT_LEFT"]) - keysDown.has(this.keys["ROT_RIGHT"])) * 0.05;
 
       let horizontal = keysDown.has(this.keys["RIGHT"]) - keysDown.has(this.keys["LEFT"]); // -1 0 1
-      let useVerticalLayout = keysDown.has(this.keys["DOWN"]) - keysDown.has(this.keys["UP"]); // -1 0 1
+      let vertical = keysDown.has(this.keys["DOWN"]) - keysDown.has(this.keys["UP"]); // -1 0 1
 
       let boostMult = this.boost(keysDown.has(this.keys["BOOST"]));
 
-      if (horizontal == 0 && useVerticalLayout == 0) return;
+      if (horizontal == 0 && vertical == 0) return;
 
       let angles = [];
 
       if (horizontal === -1) angles.push(PI);
       else if (horizontal === 1) angles.push(0);
-      if (useVerticalLayout === -1) angles.push(PI / 2);
-      else if (useVerticalLayout === 1) angles.push((3 * PI) / 2);
+      if (vertical === -1) angles.push(PI / 2);
+      else if (vertical === 1) angles.push((3 * PI) / 2);
 
       let movementAngle = this.rotation;
-      if (horizontal === 1 && useVerticalLayout === 1) movementAngle += -PI / 4;
+      if (horizontal === 1 && vertical === 1) movementAngle += -PI / 4;
       else movementAngle += angles.reduce((acc, angle) => acc + angle, 0) / angles.length;
 
       this.move(movementAngle, boostMult);
@@ -629,8 +618,8 @@ function drawJoystick(circleRadius, ringRadius) {
   fill("#BB4444");
 
   if (ringRadius / 2 < dist(joystick.originX, joystick.originY, mouseX, mouseY)) {
-    let cappedX = joystick.originX + (ringRadius / 2) * cos(joystick.angle);
-    let cappedY = joystick.originY - (ringRadius / 2) * sin(joystick.angle);
+    let cappedX = joystick.originX + (ringRadius / 3) * cos(joystick.angle);
+    let cappedY = joystick.originY - (ringRadius / 3) * sin(joystick.angle);
     circle(cappedX, cappedY, circleRadius);
     noFill();
     strokeWeight(5);
@@ -649,10 +638,26 @@ function drawJoystick(circleRadius, ringRadius) {
   pop();
 }
 
-// fire bg canvas resize 100ms after window stops resizing
+function initCanvasPositions() {
+  let x = 0;
+  let y = 0;
+  if (localPlayers.length === 4) {
+    localPlayers[0].canvasX = 0;
+    localPlayers[0].canvasY = 0;
 
-// TODO: when window is out of focus - game falls behind, doesn't recieve new packages properly
-// TODO: cleanup
-// TODO: maybe just always keep the first touch as direction, and the second signals the boost??? (makes so much sense now lol?)
-// TODO: optimize TPS counters for weaker devices somehow
-// TODO: fullscreen the game canvas, disable overflow - ensure client touch coordinates lining up with canvas coordinates (or make alternative calculations)
+    localPlayers[1].canvasX = localPlayers[0].gWidth;
+    localPlayers[1].canvasY = 0;
+
+    localPlayers[2].canvasX = 0;
+    localPlayers[2].canvasY = localPlayers[0].gHeight;
+
+    localPlayers[3].canvasX = localPlayers[0].gWidth;
+    localPlayers[3].canvasY = localPlayers[0].gHeight;
+  } else
+    localPlayers.forEach((player) => {
+      player.canvasX = x;
+      player.canvasY = y;
+      if (useVerticalLayout) y += player.gHeight;
+      else x += player.gWidth;
+    });
+}
