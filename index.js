@@ -1,6 +1,7 @@
 const BROADCAST_TPS = 30;
 const GAME_SIZE = 2000;
 const MAX_BLOBS = GAME_SIZE * GAME_SIZE * 4e-5;
+const MAX_SPIKEYS = GAME_SIZE * GAME_SIZE * 4e-6;
 const PADDING = 25;
 
 console.log("Initializing websocket server...");
@@ -9,8 +10,9 @@ let wsPlayerMap = new Map();
 
 let players = new Map();
 let blobs = new Map();
+let spikeys = new Map();
 let blobIndex = 0;
-
+let spikeyIndex = 0;
 
 // WEBSOCKET SERVER
 
@@ -92,11 +94,19 @@ function broadcastGameState() {
       seed: Math.random() * 1e10
     });
 
+    if (spikeys.size < MAX_SPIKEYS)
+    spikeys.set(spikeyIndex, {
+      id: spikeyIndex++,
+      seed: Math.random() * 1e10
+    });
+
   let state = {
     type: "BRDC",
     players: Array.from(players.values()),
     blobs: Array.from(blobs.values()),
+    spikeys: Array.from(spikeys.values())
   };
+
   // colorLog(RED, state.players, state.blobs)
   process.stdout.write(BLUE + `Broadcasting game state to ${nowServing.length} socket(s). \r` + END);
   nowServing.forEach((ws) => {
@@ -121,6 +131,6 @@ function getCurrentTime() {
   return `${hours}:${minutes} - `;
 }
 
-
+// TODOS
 // TODO: remove websockets that haven't replied in a while
 // TODO: put connections on "pause" and "resume" them  

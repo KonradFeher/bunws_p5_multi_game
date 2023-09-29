@@ -6,6 +6,7 @@ let BROADCAST_TPS;
 let LAST_PKG;
 let GAME_WIDTH;
 let GAME_HEIGHT;
+const SPIKEY_VELOCITY = 0.8;
 
 const BOOST_STRENGTH = 4;
 const BOOST_SHRINK = 0.99; // ~0.99
@@ -17,6 +18,8 @@ let localPlayers = [];
 let onlinePlayers = [];
 let blobs = [];
 let eatenBlobIds = [];
+let spikeys = [];
+let destroyedSpikeyIds = [];
 
 let useVerticalLayout = false;
 let useJoystickMode = false;
@@ -45,7 +48,6 @@ function preload() {
 
 function runSetup() {
   frameRate(60);
-
   let playerCount =
     (searchParams.get("WASD") !== "") +
     (searchParams.get("IJKL") !== "") +
@@ -307,14 +309,17 @@ class Player extends Drawable {
 
     blobs.forEach((blob) => blob.draw(this));
 
-    // SELF ALWAYS ON TOP
-    // players.filter(player => player !== this).forEach(player => player.draw(this));
-    // this.draw(this);
-
     // LARGER PLAYER ON TOP
     [...localPlayers, ...onlinePlayers]
       .sort((a, b) => (a.radius > b.radius || (a.radius === b.radius && a === this) ? 1 : -1))
       .forEach((player) => player.draw(this));
+
+    // SPIKEYS always on top
+    this.graphics.push();
+    this.graphics.rectMode(CENTER);
+    spikeys.forEach((spikey) => spikey.draw(this));
+    this.graphics.pop();
+
     this.graphics.resetMatrix();
   }
 
@@ -371,14 +376,55 @@ class Blob extends Drawable {
 }
 
 class Spikey extends Drawable {
-  constructor(seed) {
+  constructor(id, seed) {
+    super();
     randomSeed(seed);
+    this.id = id;
     this.posX = random(PADDING, GAME_WIDTH - PADDING);
     this.posY = random(PADDING, GAME_HEIGHT - PADDING);
 
     //TODO: acceleration etc etc etc etc don't forget delta time etc etc etc
+    this.velX = SPIKEY_VELOCITY * (random() - 0.5);
+    this.velY = SPIKEY_VELOCITY * (random() - 0.5);
 
     randomSeed(Math.random() * 1e10);
+  }
+
+  update() {
+    let movedX = this.velX * deltaTime;
+    if (this.posX + movedX > GAME_WIDTH) {
+      let rem = movedX - (GAME_WIDTH - this.posX);
+      this.posX = GAME_WIDTH;
+      this.posX -= rem;
+      this.velX *= -1;
+    } else if (this.posX + movedX < 0) {
+      let rem = this.posX + movedX;
+      this.posX = 0;
+      this.posX -= rem;
+      this.velX *= -1;
+    } else {
+      this.posX += movedX;
+    }
+    let movedY = this.velY * deltaTime;
+    if (this.posY + movedY > GAME_HEIGHT) {
+      let rem = movedY - (GAME_HEIGHT - this.posY);
+      this.posY = GAME_HEIGHT;
+      this.posY -= rem;
+      this.velY *= -1;
+    } else if (this.posY + movedY < 0) {
+      let rem = this.posY + movedY;
+      this.posY = 0;
+      this.posY -= rem;
+      this.velY *= -1;
+    } else {
+      this.posY += movedY;
+    }
+    //TODO vertical
+  }
+
+  draw(povPlayer) {
+    povPlayer.graphics.fill("red");
+    povPlayer.graphics.square(this.posX - povPlayer.posX, this.posY - povPlayer.posY, 50);
   }
 }
 
@@ -389,6 +435,7 @@ function logic() {
     blobs = blobs.filter((blob) => blob.update(player));
   });
   onlinePlayers.forEach((player) => player.update());
+  spikeys.forEach((spikey) => spikey.update());
 }
 
 // WEBSOCKET PAYLOADS
@@ -467,6 +514,15 @@ function addSocketListeners() {
         newBlobs.forEach((blob) => {
           blobs.push(new Blob(blob.id, blob.seed));
         });
+
+        spikeys = spikeys.filter((ls) => data.spikeys.some((s) => ls.id === s.id));
+        newSpikeys = data.spikeys.filter(
+          (s) => !destroyedSpikeyIds.includes(s.id) && !spikeys.some((ls) => ls.id === s.id)
+        );
+        newSpikeys.forEach((spikey) => {
+          spikeys.push(new Spikey(spikey.id, spikey.seed));
+        });
+
         break;
 
       default:
@@ -678,3 +734,7 @@ function initCanvasPositions() {
       else x += player.gWidth;
     });
 }
+
+//FIX: spikeys aren't in synx
+//TODO: spikeys eating you up
+//TODO: make spikeys actually look spikey
