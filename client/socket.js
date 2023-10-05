@@ -6,7 +6,7 @@ let BROADCAST_TPS;
 let LAST_PKG;
 let GAME_WIDTH;
 let GAME_HEIGHT;
-const SPIKEY_VELOCITY = 10;
+const SPIKEY_VELOCITY = 5;
 
 const BOOST_STRENGTH = 4;
 const BOOST_SHRINK = 0.99; // ~0.99
@@ -386,21 +386,24 @@ class Spikey extends Drawable {
   constructor(id, seed, createdAt) {
     super();
 
-    //TODO: occasional sync with server
+    //TODO: occasional RE-sync with server
     let elapsedTicks = ((new Date().getTime() - createdAt) / 1000) * LOGIC_TPS;
 
     randomSeed(seed);
     this.rotation = 0;
-    this.rotationSpeed = Math.random() / 5;
+    this.rotationSpeed = 0.05 + random() * 0.1;
 
     this.id = id;
     this.radius = random(10, 30);
     this.posX = random(PADDING, GAME_WIDTH - PADDING);
     this.posY = random(PADDING, GAME_HEIGHT - PADDING);
-    this.damage = 1;
+    this.damage = 0.5 + random() * 0.5;
 
-    this.velX = SPIKEY_VELOCITY * (random() - 0.5);
-    this.velY = SPIKEY_VELOCITY * (random() - 0.5);
+    let velocity = SPIKEY_VELOCITY * (0.8 + random() * 0.4);
+    let angle = random() * TWO_PI;
+
+    this.velX = velocity * cos(angle);
+    this.velY = velocity * -sin(angle);
 
     this.posX += elapsedTicks * this.velX;
     this.posY += elapsedTicks * this.velY;
@@ -763,3 +766,5 @@ function initCanvasPositions() {
       else x += player.gWidth;
     });
 }
+
+// FIX: Firefox Desktop doesn't fire touch events
