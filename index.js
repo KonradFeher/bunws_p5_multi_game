@@ -97,7 +97,8 @@ function broadcastGameState() {
     if (spikeys.size < MAX_SPIKEYS)
     spikeys.set(spikeyIndex, {
       id: spikeyIndex++,
-      seed: Math.random() * 1e10
+      seed: Math.random() * 1e10,
+      timestamp: new Date().getTime()
     });
 
   let state = {

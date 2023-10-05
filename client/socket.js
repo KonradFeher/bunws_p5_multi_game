@@ -6,7 +6,7 @@ let BROADCAST_TPS;
 let LAST_PKG;
 let GAME_WIDTH;
 let GAME_HEIGHT;
-const SPIKEY_VELOCITY = 0.8;
+const SPIKEY_VELOCITY = 10;
 
 const BOOST_STRENGTH = 4;
 const BOOST_SHRINK = 0.99; // ~0.99
@@ -26,8 +26,10 @@ let useJoystickMode = false;
 let searchParams;
 let controlScheme;
 let fireResize;
+let spikeyImage;
 
 function preload() {
+  spikeyImage = loadImage("./spikey.svg");
   searchParams = new URLSearchParams(window.location.search);
   useVerticalLayout = searchParams.has("vertical");
   useJoystickMode = searchParams.has("joystick");
@@ -338,6 +340,11 @@ class Player extends Drawable {
   gainFuel(amount) {
     this.fuel = clamp(this.fuel + amount, 0, 100);
   }
+
+  damage(x) {
+    this.originalRadius = Math.max(15, this.originalRadius - x);
+    this.radius = Math.max(this.originalRadius, this.radius - x);
+  }
 }
 
 class Blob extends Drawable {
@@ -376,55 +383,77 @@ class Blob extends Drawable {
 }
 
 class Spikey extends Drawable {
-  constructor(id, seed) {
+  constructor(id, seed, createdAt) {
     super();
+
+    //TODO: occasional sync with server
+    let elapsedTicks = ((new Date().getTime() - createdAt) / 1000) * LOGIC_TPS;
+
     randomSeed(seed);
+    this.rotation = 0;
+    this.rotationSpeed = Math.random() / 5;
+
     this.id = id;
+    this.radius = random(10, 30);
     this.posX = random(PADDING, GAME_WIDTH - PADDING);
     this.posY = random(PADDING, GAME_HEIGHT - PADDING);
+    this.damage = 1;
 
-    //TODO: acceleration etc etc etc etc don't forget delta time etc etc etc
     this.velX = SPIKEY_VELOCITY * (random() - 0.5);
     this.velY = SPIKEY_VELOCITY * (random() - 0.5);
 
+    this.posX += elapsedTicks * this.velX;
+    this.posY += elapsedTicks * this.velY;
+
+    this.bounce();
     randomSeed(Math.random() * 1e10);
   }
 
+  bounce() {
+    if (this.posX <= 0) {
+      this.posX *= -1;
+      this.velX *= -1;
+    }
+    if (this.posY <= 0) {
+      this.posY *= -1;
+      this.velY *= -1;
+    }
+    if (Math.floor(this.posX / GAME_WIDTH) % 2 === 0) {
+      this.posX = this.posX % GAME_WIDTH;
+    } else {
+      this.posX = GAME_WIDTH - (this.posX % GAME_WIDTH);
+      this.velX *= -1;
+    }
+    if (Math.floor(this.posY / GAME_HEIGHT) % 2 === 0) {
+      this.posY = this.posY % GAME_HEIGHT;
+    } else {
+      this.posY = GAME_HEIGHT - (this.posY % GAME_HEIGHT);
+      this.velY *= -1;
+    }
+  }
+
   update() {
-    let movedX = this.velX * deltaTime;
-    if (this.posX + movedX > GAME_WIDTH) {
-      let rem = movedX - (GAME_WIDTH - this.posX);
-      this.posX = GAME_WIDTH;
-      this.posX -= rem;
-      this.velX *= -1;
-    } else if (this.posX + movedX < 0) {
-      let rem = this.posX + movedX;
-      this.posX = 0;
-      this.posX -= rem;
-      this.velX *= -1;
-    } else {
-      this.posX += movedX;
-    }
-    let movedY = this.velY * deltaTime;
-    if (this.posY + movedY > GAME_HEIGHT) {
-      let rem = movedY - (GAME_HEIGHT - this.posY);
-      this.posY = GAME_HEIGHT;
-      this.posY -= rem;
-      this.velY *= -1;
-    } else if (this.posY + movedY < 0) {
-      let rem = this.posY + movedY;
-      this.posY = 0;
-      this.posY -= rem;
-      this.velY *= -1;
-    } else {
-      this.posY += movedY;
-    }
-    //TODO vertical
+    localPlayers.forEach((player) => {
+      if (dist(this.posX, this.posY, player.posX, player.posY) < this.radius + player.radius)
+        player.damage(this.damage);
+    });
+    onlinePlayers.forEach((player) => {
+      if (dist(this.posX, this.posY, player.posX, player.posY) < this.radius + player.radius)
+        player.damage(this.damage);
+    });
+
+    this.posX += this.velX;
+    this.posY += this.velY;
+    this.bounce();
   }
 
   draw(povPlayer) {
-    povPlayer.graphics.fill("red");
-    povPlayer.graphics.square(this.posX - povPlayer.posX, this.posY - povPlayer.posY, 50);
+    povPlayer.graphics.push();
+    povPlayer.graphics.translate(this.posX - povPlayer.posX, this.posY - povPlayer.posY);
+    povPlayer.graphics.imageMode(CENTER);
+    povPlayer.graphics.rotate(this.rotation += this.rotationSpeed);
+    povPlayer.graphics.image(spikeyImage, 0, 0, 2 * this.radius, 2 * this.radius);
+    povPlayer.graphics.pop();
   }
 }
 
@@ -520,7 +549,7 @@ function addSocketListeners() {
           (s) => !destroyedSpikeyIds.includes(s.id) && !spikeys.some((ls) => ls.id === s.id)
         );
         newSpikeys.forEach((spikey) => {
-          spikeys.push(new Spikey(spikey.id, spikey.seed));
+          spikeys.push(new Spikey(spikey.id, spikey.seed, spikey.timestamp));
         });
 
         break;
@@ -734,7 +763,3 @@ function initCanvasPositions() {
       else x += player.gWidth;
     });
 }
-
-//FIX: spikeys aren't in synx
-//TODO: spikeys eating you up
-//TODO: make spikeys actually look spikey
