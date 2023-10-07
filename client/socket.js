@@ -91,6 +91,12 @@ function runSetup() {
     }, 25);
   });
 
+  let isFirefox = typeof InstallTrigger !== 'undefined';
+  if (isFirefox) {
+    document.addEventListener('mousedown', touchStarted);
+    document.addEventListener('mousemove', touchMoved);
+    document.addEventListener('mouseup', touchEnded);
+  }
   initCanvasPositions();
 
   noStroke();
