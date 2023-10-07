@@ -3,6 +3,9 @@ const TILE_HEIGHT = 50;
 const PATTERN_SIZE = 15;
 const ACTIVATION_DISTANCE = 150;
 
+let foregroundColorString1 = "#1B111B";
+let foregroundColorString2 = "#331133";
+let backgroundColorString = "#1B0B1B";
 let tile_colors = [];
 let tiles;
 
@@ -22,30 +25,18 @@ class Tile {
     let distance = dist(mouseX, mouseY, x, y);
     if (distance < ACTIVATION_DISTANCE) {
       this.maxLift = 25 * cos(map(distance, 0, ACTIVATION_DISTANCE, 0, PI / 2));
-      this.lift = max(
-        map(distance, 0, ACTIVATION_DISTANCE, 1, 0),
-        this.maxLift
-      );
+      this.lift = max(map(distance, 0, ACTIVATION_DISTANCE, 1, 0), this.maxLift);
     } else {
       this.lift = max(0, this.lift - 0.4);
     }
-    // push();
-    // translate(x, y - this.lift);
-    // rect(0, 0, TILE_WIDTH-.3, TILE_HEIGHT-.3);
-    // pop();
-    rect(x, y - this.lift, TILE_WIDTH-.3, TILE_HEIGHT-.3);
+    rect(x, y - this.lift, TILE_WIDTH - 0.3, TILE_HEIGHT - 0.3);
   }
 }
 
 function setup() {
-  createCanvas(
-    windowWidth,
-    windowHeight,
-    document.querySelector("#background")
-  );
+  createCanvas(windowWidth, windowHeight, document.querySelector("#background"));
 
-  // generateTileColors("#808", "#824");
-  generateTileColors("#142", "#143");
+  generateTileColors(foregroundColorString1, foregroundColorString2); //black-purp
   generateTiles();
 
   noStroke();
@@ -77,11 +68,7 @@ function generateTiles() {
 }
 
 function setUpCanvas() {
-  resizeCanvas(
-    windowWidth,
-    windowHeight,
-    document.querySelector("#background")
-  );
+  resizeCanvas(windowWidth, windowHeight, document.querySelector("#background"));
 }
 
 // fire canvas resize 100ms after window stops resizing
@@ -94,7 +81,7 @@ window.addEventListener("resize", () => {
 });
 
 function draw() {
-  background("#141");
+  background(backgroundColorString);
   tiles.forEach((tile) => {
     tile.draw();
   });

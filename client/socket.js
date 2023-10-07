@@ -91,12 +91,14 @@ function runSetup() {
     }, 25);
   });
 
-  let isFirefox = typeof InstallTrigger !== 'undefined';
+  // desktop Firefox doesn't fore touch events on mouse interactions
+  let isFirefox = typeof InstallTrigger !== "undefined";
   if (isFirefox) {
-    document.addEventListener('mousedown', touchStarted);
-    document.addEventListener('mousemove', touchMoved);
-    document.addEventListener('mouseup', touchEnded);
+    document.addEventListener("mousedown", touchStarted);
+    document.addEventListener("mousemove", touchMoved);
+    document.addEventListener("mouseup", touchEnded);
   }
+
   initCanvasPositions();
 
   noStroke();
@@ -460,7 +462,7 @@ class Spikey extends Drawable {
     povPlayer.graphics.push();
     povPlayer.graphics.translate(this.posX - povPlayer.posX, this.posY - povPlayer.posY);
     povPlayer.graphics.imageMode(CENTER);
-    povPlayer.graphics.rotate(this.rotation += this.rotationSpeed);
+    povPlayer.graphics.rotate((this.rotation += this.rotationSpeed));
     povPlayer.graphics.image(spikeyImage, 0, 0, 2 * this.radius, 2 * this.radius);
     povPlayer.graphics.pop();
   }
@@ -772,5 +774,3 @@ function initCanvasPositions() {
       else x += player.gWidth;
     });
 }
-
-// FIX: Firefox Desktop doesn't fire touch events
