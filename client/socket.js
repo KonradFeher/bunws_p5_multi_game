@@ -6,7 +6,7 @@ let BROADCAST_TPS;
 let LAST_PKG;
 let GAME_WIDTH;
 let GAME_HEIGHT;
-const SPIKEY_VELOCITY = 5;
+const SPIKEY_VELOCITY = 0.2;
 
 const BOOST_STRENGTH = 4;
 const BOOST_SHRINK = 0.99; // ~0.99
@@ -91,6 +91,8 @@ function runSetup() {
     }, 25);
   });
 
+  window.addEventListener("focus", handleRefocus);
+
   // desktop Firefox doesn't fore touch events on mouse interactions
   let isFirefox = typeof InstallTrigger !== "undefined";
   if (isFirefox) {
@@ -142,6 +144,12 @@ function draw() {
 
   if (useJoystickMode && lmbIsPressed) {
     drawJoystick(50, 60);
+  }
+}
+
+function handleRefocus() {
+  if (spikeys) {
+    spikeys.forEach((spikey) => spikey.reinitPositions());
   }
 }
 
@@ -394,30 +402,49 @@ class Spikey extends Drawable {
   constructor(id, seed, createdAt) {
     super();
 
-    //TODO: occasional RE-sync with server
-    let elapsedTicks = ((new Date().getTime() - createdAt) / 1000) * LOGIC_TPS;
+    this.id = id;
+    this.initSeed = seed;
+    this.createdAt = createdAt;
 
-    randomSeed(seed);
+    this.init();
+
+    this.reinitPositions();
+  }
+
+  init() {
+    randomSeed(this.initSeed);
+
     this.rotation = 0;
     this.rotationSpeed = 0.05 + random() * 0.1;
 
-    this.id = id;
     this.radius = random(10, 30);
-    this.posX = random(PADDING, GAME_WIDTH - PADDING);
-    this.posY = random(PADDING, GAME_HEIGHT - PADDING);
     this.damage = 0.5 + random() * 0.5;
-
     let velocity = SPIKEY_VELOCITY * (0.8 + random() * 0.4);
     let angle = random() * TWO_PI;
 
-    this.velX = velocity * cos(angle);
-    this.velY = velocity * -sin(angle);
+    this.initPosX = random(PADDING, GAME_WIDTH - PADDING);
+    this.initPosY = random(PADDING, GAME_HEIGHT - PADDING);
 
-    this.posX += elapsedTicks * this.velX;
-    this.posY += elapsedTicks * this.velY;
+    this.initVelX = velocity * cos(angle);
+    this.initVelY = velocity * -sin(angle);
+
+    randomSeed(Math.random() * 1e10);
+  }
+
+  reinitPositions() {
+    this.lastUpdated = new Date().getTime();
+    let elapsedTime = this.lastUpdated - this.createdAt;
+
+    this.posX = this.initPosX;
+    this.posY = this.initPosY;
+    this.velX = this.initVelX;
+    this.velY = this.initVelY;
+
+    this.posX += this.velX * elapsedTime;
+    this.posY += this.velY * elapsedTime;
 
     this.bounce();
-    randomSeed(Math.random() * 1e10);
+
   }
 
   bounce() {
@@ -453,8 +480,11 @@ class Spikey extends Drawable {
         player.damage(this.damage);
     });
 
-    this.posX += this.velX;
-    this.posY += this.velY;
+    let deltaT = new Date().getTime() - this.lastUpdated;
+    this.lastUpdated = new Date().getTime();
+
+    this.posX += this.velX * deltaT;
+    this.posY += this.velY * deltaT;
     this.bounce();
   }
 
@@ -752,8 +782,6 @@ function drawJoystick(circleRadius, ringRadius) {
 }
 
 function initCanvasPositions() {
-  let x = 0;
-  let y = 0;
   if (localPlayers.length === 4) {
     localPlayers[0].canvasX = 0;
     localPlayers[0].canvasY = 0;
@@ -768,6 +796,8 @@ function initCanvasPositions() {
     localPlayers[3].canvasY = localPlayers[0].gHeight;
   } else
     localPlayers.forEach((player) => {
+      let x = 0;
+      let y = 0;
       player.canvasX = x;
       player.canvasY = y;
       if (useVerticalLayout) y += player.gHeight;
