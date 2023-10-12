@@ -218,6 +218,8 @@ class Player extends Drawable {
     this.gWidth = windowWidth * this.relSize[0];
     this.gHeight = windowHeight * this.relSize[1];
     this.graphics = createGraphics(this.gWidth, this.gHeight);
+    this.graphics.imageMode(CENTER);
+    this.graphics.rectMode(CENTER);
     this.graphics.noStroke();
   }
 
@@ -234,10 +236,10 @@ class Player extends Drawable {
       this.originalRadius = originalRadius;
 
       // feels JANK
-      // this.prevRadius = this.radius;
-      // this.nextRadius = radius;
-      // this.nextFuel = fuel;
-      // this.prevFuel = this.radius;
+      this.prevRadius = this.radius;
+      this.nextRadius = radius;
+      this.nextFuel = fuel;
+      this.prevFuel = this.fuel;
     }
   }
 
@@ -284,8 +286,8 @@ class Player extends Drawable {
       let elapsed = map(new Date().getTime(), LAST_PKG, LAST_PKG + 1000 / BROADCAST_TPS, 0, 1, true);
       this.posX = this.prevX + (this.nextX - this.prevX) * elapsed;
       this.posY = this.prevY + (this.nextY - this.prevY) * elapsed;
-      // this.radius = this.prevRadius + (this.nextRadius - this.prevRadius) * elapsed;
-      // this.fuel = this.prevFuel + (this.nextFuel - this.prevFuel) * elapsed;
+      this.fuel = this.prevFuel + (this.nextFuel - this.prevFuel) * elapsed;
+      this.radius = this.prevRadius + (this.nextRadius - this.prevRadius) * elapsed;
     }
   }
 
@@ -323,7 +325,13 @@ class Player extends Drawable {
     this.graphics.scale(this.scale);
 
     this.graphics.fill(10, 0, waver(20, 10, cos));
-    this.graphics.rect(0 - this.posX, 0 - this.posY, GAME_WIDTH, GAME_HEIGHT, 2 * this.radius);
+    this.graphics.rect(
+      0 - this.posX + GAME_WIDTH / 2,
+      0 - this.posY + GAME_HEIGHT / 2,
+      GAME_WIDTH,
+      GAME_HEIGHT,
+      2 * this.radius
+    );
 
     blobs.forEach((blob) => blob.draw(this));
 
@@ -444,7 +452,6 @@ class Spikey extends Drawable {
     this.posY += this.velY * elapsedTime;
 
     this.bounce();
-
   }
 
   bounce() {
@@ -491,7 +498,6 @@ class Spikey extends Drawable {
   draw(povPlayer) {
     povPlayer.graphics.push();
     povPlayer.graphics.translate(this.posX - povPlayer.posX, this.posY - povPlayer.posY);
-    povPlayer.graphics.imageMode(CENTER);
     povPlayer.graphics.rotate((this.rotation += this.rotationSpeed));
     povPlayer.graphics.image(spikeyImage, 0, 0, 2 * this.radius, 2 * this.radius);
     povPlayer.graphics.pop();
